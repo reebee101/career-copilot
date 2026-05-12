@@ -1,0 +1,844 @@
+import { useState, useEffect, useCallback } from 'react'
+import { Upload, LayoutDashboard, Search, FileText, List, Mic, Award, Zap, RefreshCw, ChevronRight, X, Check, AlertCircle, Loader, ExternalLink, Bot, Briefcase, TrendingUp, Target, Send } from 'lucide-react'
+import * as api from './api'
+
+const STATUS_COLORS = {
+  saved: 'badge-gray',
+  applied: 'badge-purple',
+  interview: 'badge-green',
+  offer: 'badge-green',
+  rejected: 'badge-coral',
+}
+
+const STATUS_LABELS = {
+  saved: 'Saved',
+  applied: 'Applied',
+  interview: 'Interview',
+  offer: 'Offer 🎉',
+  rejected: 'Rejected',
+}
+
+function ScoreRing({ score, size = 90 }) {
+  const r = 36; const circ = 2 * Math.PI * r
+  const offset = circ - (score / 100) * circ
+  const color = score >= 80 ? '#1D9E75' : score >= 60 ? '#EF9F27' : '#D85A30'
+  return (
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} viewBox="0 0 90 90" style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx="45" cy="45" r={r} fill="none" stroke="#E5E7EB" strokeWidth="8" />
+        <circle cx="45" cy="45" r={r} fill="none" stroke={color} strokeWidth="8"
+          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: 20, fontWeight: 600, color: '#111827' }}>{score}</span>
+        <span style={{ fontSize: 10, color: '#9CA3AF' }}>/ 100</span>
+      </div>
+    </div>
+  )
+}
+
+function Spinner() {
+  return <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
+}
+
+// ── UPLOAD SCREEN ──────────────────────────────────────────────
+function UploadScreen({ onUploaded }) {
+  const [dragging, setDragging] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleFile = async (file) => {
+    if (!file) return
+    setLoading(true); setError('')
+    try {
+      const result = await api.uploadCV(file)
+      localStorage.setItem('session_id', result.session_id)
+      localStorage.setItem('cv_name', result.name || 'Your CV')
+      onUploaded(result)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', background: 'var(--bg)' }}>
+      <div style={{ maxWidth: 480, width: '100%', textAlign: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: '1.5rem' }}>
+          <div style={{ width: 40, height: 40, background: 'var(--accent)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Bot size={22} color="white" />
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontSize: 20, fontWeight: 600 }}>AI Career Copilot</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>ML/AI Job Hunt — Powered by Groq</div>
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: '2rem' }}>
+          <div
+            onDragOver={e => { e.preventDefault(); setDragging(true) }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={e => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]) }}
+            onClick={() => document.getElementById('cv-input').click()}
+            style={{
+              border: `2px dashed ${dragging ? 'var(--accent)' : 'var(--border)'}`,
+              borderRadius: 'var(--radius)',
+              padding: '2.5rem 1.5rem',
+              cursor: 'pointer',
+              background: dragging ? 'var(--accent-light)' : 'var(--border-light)',
+              transition: 'all 0.15s',
+              marginBottom: '1rem',
+            }}
+          >
+            {loading ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <Loader size={32} color="var(--accent)" style={{ animation: 'spin 1s linear infinite' }} />
+                <div style={{ fontWeight: 500 }}>Analyzing your CV…</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>This takes ~10 seconds</div>
+              </div>
+            ) : (
+              <>
+                <Upload size={32} color="var(--accent)" style={{ marginBottom: 10 }} />
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>Drop your CV here</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>PDF, DOCX, or TXT · Max 5MB</div>
+              </>
+            )}
+          </div>
+          <input id="cv-input" type="file" accept=".pdf,.docx,.doc,.txt" style={{ display: 'none' }}
+            onChange={e => handleFile(e.target.files[0])} />
+
+          {error && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '10px 12px', background: 'var(--coral-light)', borderRadius: 'var(--radius-sm)', color: 'var(--coral)', fontSize: 13 }}>
+              <AlertCircle size={14} /> {error}
+            </div>
+          )}
+
+          <div style={{ marginTop: '1.25rem', padding: '12px 14px', background: 'var(--accent2-light)', borderRadius: 'var(--radius-sm)', fontSize: 13, color: '#3C3489', textAlign: 'left' }}>
+            <strong>What happens:</strong> Your CV is parsed, scored against ATS criteria, missing skills identified, and bullets rewritten — all in one step.
+          </div>
+        </div>
+      </div>
+      <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
+    </div>
+  )
+}
+
+// ── DASHBOARD ──────────────────────────────────────────────────
+function Dashboard({ profile, applications }) {
+  const analysis = profile?.analysis || {}
+  const breakdown = analysis.score_breakdown || {}
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: '1rem' }}>
+        {[
+          { label: 'ATS Score', val: profile?.ats_score || 0, color: 'var(--accent)' },
+          { label: 'Applications', val: applications.length, color: 'var(--accent2)' },
+          { label: 'Interviews', val: applications.filter(a => a.status === 'interview').length, color: 'var(--amber)' },
+          { label: 'Offers', val: applications.filter(a => a.status === 'offer').length, color: 'var(--coral)' },
+        ].map(m => (
+          <div key={m.label} className="card" style={{ textAlign: 'center', padding: '1rem' }}>
+            <div style={{ fontSize: 28, fontWeight: 600, color: m.color }}>{m.val}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{m.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 10, marginBottom: '1rem' }}>
+        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <ScoreRing score={profile?.ats_score || 0} />
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>ATS Score</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{analysis.summary || 'Upload your CV to get started.'}</div>
+          </div>
+        </div>
+        <div className="card">
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Score breakdown</div>
+          {Object.entries(breakdown).map(([k, v]) => (
+            <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+              <div style={{ fontSize: 12, width: 130, color: 'var(--text-secondary)', flexShrink: 0 }}>
+                {k.replace(/_/g, ' ')}
+              </div>
+              <div style={{ flex: 1, height: 5, background: 'var(--border-light)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ width: `${v}%`, height: '100%', background: v >= 70 ? 'var(--accent)' : v >= 50 ? 'var(--amber)' : 'var(--coral)', borderRadius: 3 }} />
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 500, width: 28, textAlign: 'right' }}>{v}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div className="card">
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Strengths</div>
+          {(analysis.strengths || []).map((s, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 7, fontSize: 13 }}>
+              <Check size={14} color="var(--accent)" style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>{s}</span>
+            </div>
+          ))}
+        </div>
+        <div className="card">
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Critical gaps</div>
+          {(analysis.critical_gaps || []).map((g, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 7, fontSize: 13 }}>
+              <span className={`badge badge-${g.severity === 'critical' ? 'coral' : g.severity === 'moderate' ? 'amber' : 'gray'}`} style={{ flexShrink: 0 }}>{g.severity}</span>
+              <div>
+                <div style={{ fontWeight: 500 }}>{g.skill}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{g.reason}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── JD ANALYZER ────────────────────────────────────────────────
+function JDAnalyzer({ sessionId, onCreateApp }) {
+  const [jd, setJd] = useState('')
+  const [company, setCompany] = useState('')
+  const [role, setRole] = useState('')
+  const [result, setResult] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [coverLetter, setCoverLetter] = useState('')
+  const [loadingCL, setLoadingCL] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const analyze = async () => {
+    if (!jd.trim()) return
+    setLoading(true); setResult(null); setCoverLetter('')
+    try {
+      const r = await api.scoreAgainstJD(sessionId, jd, company, role)
+      setResult(r)
+    } catch (e) { alert(e.message) }
+    finally { setLoading(false) }
+  }
+
+  const genCL = async () => {
+    setLoadingCL(true)
+    try {
+      const r = await api.generateCoverLetter(sessionId, jd, company, role)
+      setCoverLetter(r.cover_letter)
+    } catch (e) { alert(e.message) }
+    finally { setLoadingCL(false) }
+  }
+
+  const saveApp = async () => {
+    try {
+      await onCreateApp(company, role, '', jd)
+      setSaved(true)
+    } catch (e) { alert(e.message) }
+  }
+
+  const matchColor = (score) => score >= 75 ? 'var(--accent)' : score >= 55 ? 'var(--amber)' : 'var(--coral)'
+
+  return (
+    <div>
+      <div className="card" style={{ marginBottom: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <input placeholder="Company name" value={company} onChange={e => setCompany(e.target.value)} />
+          <input placeholder="Role title" value={role} onChange={e => setRole(e.target.value)} />
+        </div>
+        <textarea placeholder="Paste the full job description here…" value={jd} onChange={e => setJd(e.target.value)} style={{ minHeight: 140, marginBottom: 10 }} />
+        <button className="btn btn-primary" onClick={analyze} disabled={!jd.trim() || loading}>
+          {loading ? <><Spinner /> Analyzing…</> : <><Target size={14} /> Score & Analyze</>}
+        </button>
+      </div>
+
+      {result && (
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 10, marginBottom: 10 }}>
+            <div className="card" style={{ textAlign: 'center', padding: '1.25rem 1rem' }}>
+              <ScoreRing score={result.match_score} size={80} />
+              <div style={{ fontWeight: 600, marginTop: 8, fontSize: 13 }}>{result.verdict}</div>
+            </div>
+            <div className="card">
+              <div style={{ fontWeight: 500, marginBottom: 8 }}>Application strategy</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 10 }}>{result.application_strategy}</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button className="btn btn-primary btn-sm" onClick={genCL} disabled={loadingCL}>
+                  {loadingCL ? <><Spinner /> Generating…</> : <><FileText size={13} /> Cover Letter</>}
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={saveApp} disabled={saved}>
+                  {saved ? <><Check size={13} /> Saved!</> : <><List size={13} /> Save to Tracker</>}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+            <div className="card">
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>Matched keywords</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                {(result.matched_keywords || []).map((k, i) => <span key={i} className="badge badge-green">{k}</span>)}
+              </div>
+            </div>
+            <div className="card">
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>Missing keywords</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                {(result.missing_keywords || []).map((k, i) => <span key={i} className="badge badge-coral">{k}</span>)}
+              </div>
+            </div>
+          </div>
+
+          <div className="card" style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>Tailored bullets to add</div>
+            {(result.tailored_bullets || []).map((b, i) => (
+              <div key={i} style={{ fontSize: 13, padding: '8px 12px', background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)', borderLeft: '2px solid var(--accent)', marginBottom: 6 }}>• {b}</div>
+            ))}
+          </div>
+
+          {coverLetter && (
+            <div className="card">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Cover letter</div>
+                <button className="btn btn-ghost btn-sm" onClick={() => navigator.clipboard.writeText(coverLetter)}>Copy</button>
+              </div>
+              <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', color: 'var(--text)' }}>{coverLetter}</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── JOBS BOARD ─────────────────────────────────────────────────
+function JobsBoard({ sessionId, onCreateApp }) {
+  const [jobs, setJobs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [selected, setSelected] = useState(null)
+  const [region, setRegion] = useState('egypt')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const remoteOnly = region === 'remote'
+      const country = region === 'egypt' ? 'egypt' : region === 'remote' ? null : null
+      const j = await api.fetchJobs(remoteOnly, country)
+      const filtered = region === 'egypt'
+        ? j.filter(job => job.location?.toLowerCase().includes('egypt') || job.country === 'eg' || job.source === 'demo')
+        : region === 'remote'
+        ? j.filter(job => job.remote)
+        : j
+      setJobs(filtered)
+    }
+    catch (e) { console.error(e) }
+    finally { setLoading(false) }
+  }, [region])
+
+  useEffect(() => { load() }, [load, region])
+
+  const refresh = async () => {
+    setRefreshing(true)
+    await api.refreshJobs()
+    await load()
+    setRefreshing(false)
+  }
+
+  const addToTracker = async (job) => {
+    try {
+      await onCreateApp(job.company, job.title, job.apply_url, job.description_full)
+      alert(`"${job.title}" at ${job.company} added to your tracker!`)
+    } catch (e) { alert(e.message) }
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: selected ? '1fr 1.3fr' : '1fr', gap: 10 }}>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+          {[
+            { value: 'egypt', label: '🇪🇬 Egypt' },
+            { value: 'remote', label: '🌐 Remote' },
+            { value: 'worldwide', label: '🌍 Worldwide' },
+          ].map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setRegion(opt.value)}
+              style={{
+                padding: '5px 12px',
+                borderRadius: 20,
+                border: region === opt.value ? '1.5px solid var(--accent)' : '1.5px solid var(--border-light)',
+                background: region === opt.value ? 'var(--accent-light)' : 'transparent',
+                color: region === opt.value ? 'var(--accent)' : 'var(--text-secondary)',
+                fontSize: 12,
+                fontWeight: region === opt.value ? 600 : 400,
+                cursor: 'pointer',
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+          <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={refresh} disabled={refreshing}>
+            <RefreshCw size={13} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+            {refreshing ? 'Refreshing…' : 'Refresh jobs'}
+          </button>
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}><Spinner /></div>
+        ) : (
+          jobs.map(job => (
+            <div key={job.id} className="card"
+              style={{ marginBottom: 8, cursor: 'pointer', border: selected?.id === job.id ? '1px solid var(--accent)' : undefined }}
+              onClick={() => setSelected(selected?.id === job.id ? null : job)}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 2 }}>{job.title}</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{job.company} · {job.location}</div>
+                  {(job.salary_min || job.salary_max) && (
+                    <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 4 }}>
+                      {job.salary_min && job.salary_max ? `${Math.round(job.salary_min/1000)}k – ${Math.round(job.salary_max/1000)}k EGP` : ''}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+                  {job.remote && <span className="badge badge-green">Remote</span>}
+                  <span className="badge badge-gray">{job.source}</span>
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                {job.description}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {selected && (
+        <div className="card" style={{ height: 'fit-content', position: 'sticky', top: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>{selected.title}</div>
+              <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>{selected.company} · {selected.location}</div>
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}><X size={14} /></button>
+          </div>
+          <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text)', maxHeight: 300, overflowY: 'auto', marginBottom: 12 }}>
+            {selected.description_full || selected.description}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary btn-sm" onClick={() => addToTracker(selected)}>
+              <List size={13} /> Add to Tracker
+            </button>
+            {selected.apply_url && (
+              <a href={selected.apply_url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm">
+                <ExternalLink size={13} /> Apply manually
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── APPLICATIONS TRACKER ───────────────────────────────────────
+function ApplicationsTracker({ sessionId, applications, onRefresh }) {
+  const [autoApplyId, setAutoApplyId] = useState(null)
+  const [phone, setPhone] = useState('')
+  const [linkedinUrl, setLinkedinUrl] = useState('')
+  const [applying, setApplying] = useState(null)
+  const [selectedApp, setSelectedApp] = useState(null)
+
+  const updateStatus = async (appId, status) => {
+    try { await api.updateApplicationStatus(appId, status); onRefresh() }
+    catch (e) { alert(e.message) }
+  }
+
+  const deleteApp = async (appId) => {
+    if (!confirm('Delete this application?')) return
+    try { await api.deleteApplication(appId); onRefresh() }
+    catch (e) { alert(e.message) }
+  }
+
+  const doAutoApply = async (appId) => {
+    setApplying(appId)
+    try {
+      const r = await api.triggerAutoApply(sessionId, appId, phone, linkedinUrl)
+      alert(r.message)
+      setAutoApplyId(null)
+      setTimeout(onRefresh, 3000)
+    } catch (e) { alert(e.message) }
+    finally { setApplying(null) }
+  }
+
+  const columns = ['saved', 'applied', 'interview', 'offer', 'rejected']
+  const byStatus = Object.fromEntries(columns.map(c => [c, applications.filter(a => a.status === c)]))
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 10 }}>
+        {columns.map(col => (
+          <div key={col} style={{ minWidth: 200, flex: 1 }}>
+            <div style={{ fontWeight: 500, fontSize: 12, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              {col} <span style={{ background: 'var(--border-light)', borderRadius: 20, padding: '1px 7px', fontSize: 11 }}>{byStatus[col].length}</span>
+            </div>
+            {byStatus[col].map(app => (
+              <div key={app.id} className="card" style={{ marginBottom: 8, fontSize: 13 }}>
+                <div style={{ fontWeight: 600, marginBottom: 2 }}>{app.company}</div>
+                <div style={{ color: 'var(--text-secondary)', marginBottom: 8 }}>{app.role}</div>
+                {app.match_score > 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 6 }}>
+                    Match: <strong>{app.match_score}%</strong>
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setSelectedApp(app)}>Details</button>
+                  {col === 'saved' && (
+                    <button className="btn btn-secondary btn-sm" onClick={() => setAutoApplyId(app.id)}>
+                      <Zap size={12} /> Auto-apply
+                    </button>
+                  )}
+                  {col !== 'rejected' && col !== 'offer' && (
+                    <select
+                      style={{ fontSize: 11, padding: '3px 6px', width: 'auto' }}
+                      value={app.status}
+                      onChange={e => updateStatus(app.id, e.target.value)}
+                    >
+                      {columns.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+                    </select>
+                  )}
+                  <button className="btn btn-danger btn-sm" onClick={() => deleteApp(app.id)}><X size={11} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {/* Auto-apply modal */}
+      {autoApplyId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
+          <div className="card" style={{ maxWidth: 420, width: '90%' }}>
+            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Auto-Apply</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              Playwright will fill the application form and submit. Make sure <code>AUTO_APPLY_ENABLED=true</code> is set in your <code>.env</code>.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+              <input placeholder="Phone number" value={phone} onChange={e => setPhone(e.target.value)} />
+              <input placeholder="LinkedIn URL (optional)" value={linkedinUrl} onChange={e => setLinkedinUrl(e.target.value)} />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" onClick={() => doAutoApply(autoApplyId)} disabled={applying === autoApplyId}>
+                {applying === autoApplyId ? <><Spinner /> Applying…</> : <><Zap size={14} /> Apply now</>}
+              </button>
+              <button className="btn btn-ghost" onClick={() => setAutoApplyId(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* App detail modal */}
+      {selectedApp && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
+          <div className="card" style={{ maxWidth: 560, width: '90%', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 15 }}>{selectedApp.company}</div>
+                <div style={{ color: 'var(--text-secondary)' }}>{selectedApp.role}</div>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setSelectedApp(null)}><X size={14} /></button>
+            </div>
+            {selectedApp.cover_letter && (
+              <>
+                <div style={{ fontWeight: 500, marginBottom: 6 }}>Cover letter</div>
+                <div style={{ fontSize: 13, lineHeight: 1.7, background: 'var(--border-light)', padding: 12, borderRadius: 'var(--radius-sm)', marginBottom: 12, whiteSpace: 'pre-wrap' }}>{selectedApp.cover_letter}</div>
+              </>
+            )}
+            {selectedApp.tailored_bullets?.length > 0 && (
+              <>
+                <div style={{ fontWeight: 500, marginBottom: 6 }}>Tailored bullets</div>
+                {selectedApp.tailored_bullets.map((b, i) => (
+                  <div key={i} style={{ fontSize: 13, padding: '7px 10px', background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)', borderLeft: '2px solid var(--accent)', marginBottom: 5 }}>• {b}</div>
+                ))}
+              </>
+            )}
+            {selectedApp.missing_keywords?.length > 0 && (
+              <>
+                <div style={{ fontWeight: 500, margin: '10px 0 6px' }}>Missing keywords</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {selectedApp.missing_keywords.map((k, i) => <span key={i} className="badge badge-coral">{k}</span>)}
+                </div>
+              </>
+            )}
+            {selectedApp.apply_url && (
+              <a href={selectedApp.apply_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm" style={{ marginTop: 14, display: 'inline-flex' }}>
+                <ExternalLink size={12} /> Open application
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── INTERVIEW PREP ─────────────────────────────────────────────
+function InterviewPrep({ sessionId, profile }) {
+  const [questions, setQuestions] = useState([])
+  const [role, setRole] = useState('ML Engineer')
+  const [company, setCompany] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [practicing, setPracticing] = useState(null)
+  const [answer, setAnswer] = useState('')
+  const [feedback, setFeedback] = useState(null)
+  const [loadingFB, setLoadingFB] = useState(false)
+
+  const generate = async () => {
+    setLoading(true); setQuestions([])
+    try { const r = await api.getInterviewPrep(sessionId, role, company); setQuestions(r.questions || []) }
+    catch (e) { alert(e.message) }
+    finally { setLoading(false) }
+  }
+
+  const getFeedback = async (q) => {
+    if (!answer.trim()) return
+    setLoadingFB(true); setFeedback(null)
+    try { const r = await api.submitPracticeFeedback(sessionId, q.question, answer, role); setFeedback(r) }
+    catch (e) { alert(e.message) }
+    finally { setLoadingFB(false) }
+  }
+
+  const catColor = { 'ML design': 'badge-purple', MLOps: 'badge-amber', Fundamentals: 'badge-gray', Behavioral: 'badge-gray', CV: 'badge-green', NLP: 'badge-green' }
+
+  return (
+    <div>
+      <div className="card" style={{ marginBottom: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <input placeholder="Role (e.g. ML Engineer)" value={role} onChange={e => setRole(e.target.value)} />
+          <input placeholder="Company (optional)" value={company} onChange={e => setCompany(e.target.value)} />
+        </div>
+        <button className="btn btn-primary" onClick={generate} disabled={loading}>
+          {loading ? <><Spinner /> Generating…</> : <><Mic size={14} /> Generate questions</>}
+        </button>
+      </div>
+
+      {questions.map((q, i) => (
+        <div key={i} className="card" style={{ marginBottom: 8 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
+            <span className={`badge ${catColor[q.category] || 'badge-gray'}`} style={{ flexShrink: 0 }}>{q.category}</span>
+            <div style={{ fontWeight: 500 }}>{q.question}</div>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+            💡 {q.tip}
+          </div>
+          {practicing === i ? (
+            <div>
+              <textarea placeholder="Type your answer…" value={answer} onChange={e => setAnswer(e.target.value)} style={{ marginBottom: 8 }} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-primary btn-sm" onClick={() => getFeedback(q)} disabled={loadingFB}>
+                  {loadingFB ? <><Spinner /> Evaluating…</> : <><Send size={12} /> Get feedback</>}
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => { setPracticing(null); setAnswer(''); setFeedback(null) }}>Cancel</button>
+              </div>
+              {feedback && (
+                <div style={{ marginTop: 12, padding: 12, background: 'var(--border-light)', borderRadius: 'var(--radius-sm)' }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                    <span style={{ fontWeight: 600, fontSize: 20 }}>{feedback.score}/10</span>
+                    <span className={`badge ${feedback.score >= 7 ? 'badge-green' : feedback.score >= 5 ? 'badge-amber' : 'badge-coral'}`}>{feedback.verdict}</span>
+                  </div>
+                  {feedback.what_worked?.length > 0 && (
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)', marginBottom: 4 }}>What worked</div>
+                      {feedback.what_worked.map((w, j) => <div key={j} style={{ fontSize: 13, marginBottom: 2 }}>✓ {w}</div>)}
+                    </div>
+                  )}
+                  {feedback.what_to_improve?.length > 0 && (
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--coral)', marginBottom: 4 }}>Improve</div>
+                      {feedback.what_to_improve.map((w, j) => <div key={j} style={{ fontSize: 13, marginBottom: 2 }}>→ {w}</div>)}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 8 }}>
+                    <strong>Ideal answer:</strong> {feedback.ideal_answer_outline}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button className="btn btn-ghost btn-sm" onClick={() => { setPracticing(i); setAnswer(''); setFeedback(null) }}>
+              <Mic size={12} /> Practice answering
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── UPSKILL ────────────────────────────────────────────────────
+function Upskill({ profile }) {
+  const analysis = profile?.analysis || {}
+  const certs = analysis.recommended_certs || []
+  const projects = analysis.recommended_projects || []
+
+  return (
+    <div>
+      <div className="card" style={{ marginBottom: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Certifications (ranked by ROI)</div>
+        {certs.map((c, i) => (
+          <div key={i} style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: i < certs.length - 1 ? '1px solid var(--border-light)' : 'none', alignItems: 'flex-start' }}>
+            <div style={{ width: 28, height: 28, background: 'var(--accent2-light)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600, color: '#3C3489', flexShrink: 0 }}>
+              {c.priority}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 500, marginBottom: 2 }}>{c.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 2 }}>{c.provider} · {c.reason}</div>
+              <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 500 }}>{c.score_impact}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card">
+        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Project ideas to build</div>
+        {projects.map((p, i) => (
+          <div key={i} style={{ padding: '10px 0', borderBottom: i < projects.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+              <div style={{ fontWeight: 500 }}>{p.title}</div>
+              <span className={`badge ${p.difficulty === 'advanced' ? 'badge-coral' : p.difficulty === 'intermediate' ? 'badge-amber' : 'badge-green'}`}>{p.difficulty}</span>
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>{p.description}</div>
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+              {(p.skills_added || []).map((s, j) => <span key={j} className="badge badge-purple">{s}</span>)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── BULLETS ────────────────────────────────────────────────────
+function BulletRewriter({ profile }) {
+  const bullets = profile?.analysis?.rewritten_bullets || []
+  return (
+    <div>
+      <div style={{ padding: '10px 14px', background: 'var(--accent2-light)', borderRadius: 'var(--radius-sm)', fontSize: 13, color: '#3C3489', marginBottom: 12 }}>
+        Every bullet rewritten with: <strong>Action verb → Metric → Business impact</strong>. Copy the improved versions into your CV.
+      </div>
+      {bullets.map((b, i) => (
+        <div key={i} className="card" style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', marginBottom: 4 }}>BEFORE</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '8px 12px', background: 'var(--border-light)', borderRadius: 'var(--radius-sm)', borderLeft: '2px solid var(--border)', marginBottom: 8 }}>{b.original}</div>
+          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--accent)', marginBottom: 4 }}>AFTER</div>
+          <div style={{ fontSize: 13, padding: '8px 12px', background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)', borderLeft: '2px solid var(--accent)', marginBottom: 6 }}>{b.rewritten}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>💡 {b.improvement}</div>
+        </div>
+      ))}
+      {bullets.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>Upload your CV to see rewritten bullets.</div>
+      )}
+    </div>
+  )
+}
+
+// ── ROOT APP ───────────────────────────────────────────────────
+const TABS = [
+  { id: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard },
+  { id: 'jobs', label: 'Jobs', Icon: Briefcase },
+  { id: 'jd', label: 'JD Analyzer', Icon: Target },
+  { id: 'bullets', label: 'Bullets', Icon: TrendingUp },
+  { id: 'tracker', label: 'Tracker', Icon: List },
+  { id: 'interview', label: 'Interview', Icon: Mic },
+  { id: 'upskill', label: 'Upskill', Icon: Award },
+]
+
+export default function App() {
+  const [profile, setProfile] = useState(null)
+  const [tab, setTab] = useState('dashboard')
+  const [applications, setApplications] = useState([])
+  const sessionId = profile?.session_id || localStorage.getItem('session_id')
+
+  // Try to restore session
+  useEffect(() => {
+    const saved = localStorage.getItem('session_id')
+    if (saved && !profile) {
+      api.getProfile(saved).then(p => setProfile(p)).catch(() => {})
+    }
+  }, [])
+
+  const loadApplications = useCallback(async () => {
+    if (!sessionId) return
+    try { const a = await api.listApplications(sessionId); setApplications(a) } catch {}
+  }, [sessionId])
+
+  useEffect(() => { loadApplications() }, [loadApplications])
+
+  const handleUploaded = (result) => {
+    setProfile(result)
+    setTab('dashboard')
+  }
+
+  const handleCreateApp = async (company, role, applyUrl, jdText) => {
+    if (!sessionId) throw new Error('Upload your CV first')
+    await api.createApplication(sessionId, company, role, applyUrl, jdText)
+    await loadApplications()
+  }
+
+  if (!profile && !sessionId) return <UploadScreen onUploaded={handleUploaded} />
+
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
+      {/* Sidebar */}
+      <div style={{ width: 200, background: 'var(--surface)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', padding: '1rem 0', flexShrink: 0 }}>
+        <div style={{ padding: '0 1rem 1rem', borderBottom: '1px solid var(--border-light)', marginBottom: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 30, height: 30, background: 'var(--accent)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Bot size={16} color="white" />
+            </div>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>Career Copilot</div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>ML/AI Hunt</div>
+            </div>
+          </div>
+          {profile?.name && (
+            <div style={{ marginTop: 10, padding: '8px 10px', background: 'var(--border-light)', borderRadius: 'var(--radius-sm)' }}>
+              <div style={{ fontWeight: 500, fontSize: 12 }}>{profile.name}</div>
+              <div style={{ fontSize: 11, color: 'var(--accent)' }}>ATS: {profile.ats_score}/100</div>
+            </div>
+          )}
+        </div>
+
+        {TABS.map(({ id, label, Icon }) => (
+          <button key={id} onClick={() => setTab(id)}
+            style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 1rem', fontSize: 13, fontWeight: tab === id ? 500 : 400, color: tab === id ? 'var(--accent)' : 'var(--text-secondary)', background: tab === id ? 'var(--accent-light)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', borderLeft: tab === id ? '3px solid var(--accent)' : '3px solid transparent', transition: 'all 0.12s' }}
+          >
+            <Icon size={15} />
+            {label}
+            {id === 'tracker' && applications.length > 0 && (
+              <span style={{ marginLeft: 'auto', background: 'var(--accent2-light)', color: '#3C3489', borderRadius: 20, padding: '1px 6px', fontSize: 10 }}>{applications.length}</span>
+            )}
+          </button>
+        ))}
+
+        <div style={{ marginTop: 'auto', padding: '0.75rem 1rem', borderTop: '1px solid var(--border-light)' }}>
+          <button className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center' }}
+            onClick={() => { localStorage.removeItem('session_id'); setProfile(null); setApplications([]) }}>
+            <Upload size={12} /> New CV
+          </button>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '1.25rem' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          {tab === 'dashboard' && <Dashboard profile={profile} applications={applications} />}
+          {tab === 'jobs' && <JobsBoard sessionId={sessionId} onCreateApp={handleCreateApp} />}
+          {tab === 'jd' && <JDAnalyzer sessionId={sessionId} onCreateApp={handleCreateApp} />}
+          {tab === 'bullets' && <BulletRewriter profile={profile} />}
+          {tab === 'tracker' && <ApplicationsTracker sessionId={sessionId} applications={applications} onRefresh={loadApplications} />}
+          {tab === 'interview' && <InterviewPrep sessionId={sessionId} profile={profile} />}
+          {tab === 'upskill' && <Upskill profile={profile} />}
+        </div>
+      </div>
+      <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
+    </div>
+  )
+}
