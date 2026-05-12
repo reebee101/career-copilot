@@ -116,3 +116,51 @@ Reference the candidate's actual projects and skills from their CV."""
         {"role": "user", "content": f"Generate interview questions based on this CV:\n\n{cv_text[:2500]}"},
     ], max_tokens=1500)
     return data.get("questions", data) if isinstance(data, dict) else data
+# ── Match CV against job posting ──────────────────────────────
+
+async def match_cv_to_job(cv_text: str, jd_text: str) -> dict:
+    """
+    Scores how well a CV matches a job description.
+    Used by the scheduler to filter jobs automatically.
+    """
+
+    system = """
+You are an expert AI recruiter and ATS scoring engine.
+
+Return a JSON object with EXACTLY these keys:
+
+- match_score (integer 0-100):
+  realistic hiring match score
+
+- matched (boolean):
+  true if candidate is a strong fit
+
+- strengths (array of strings):
+  strongest matching qualifications
+
+- missing_requirements (array of strings):
+  important missing skills/tools/requirements
+
+- matched_keywords (array of strings):
+  keywords found in both CV and JD
+
+- missing_keywords (array of strings):
+  important JD keywords missing from CV
+
+- reasoning (string):
+  3-4 sentence explanation of why this candidate matches or does not match
+"""
+
+    return _chat_json([
+        {"role": "system", "content": system},
+        {
+            "role": "user",
+            "content": f"""
+CV:
+{cv_text[:3000]}
+
+JOB DESCRIPTION:
+{jd_text[:2500]}
+"""
+        },
+    ], max_tokens=1200)

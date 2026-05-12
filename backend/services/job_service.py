@@ -1,11 +1,30 @@
+"""
+job_service.py — AI/ML job aggregation service
+
+Sources:
+- Adzuna
+- SerpAPI Google Jobs
+- Mock/demo jobs fallback
+
+Features:
+- Deduplication
+- Normalized schema
+- Remote detection
+- Fresh-job prioritization
+- Production-safe error handling
+"""
+
 import httpx
-import json
 from datetime import datetime
 from config import get_settings
 
 settings = get_settings()
 
 ADZUNA_BASE = "https://api.adzuna.com/v1/api/jobs"
+
+# ──────────────────────────────────────────────────────────────
+# Default AI/ML search keywords
+# ──────────────────────────────────────────────────────────────
 
 ML_KEYWORDS = [
     "machine learning engineer",
@@ -14,8 +33,8 @@ ML_KEYWORDS = [
     "computer vision engineer",
     "NLP engineer",
     "MLOps engineer",
-    "data scientist",
     "LLM engineer",
+    "data scientist",
 ]
 
 COUNTRY_MAP = {
@@ -28,76 +47,184 @@ COUNTRY_MAP = {
     "au": "Australia",
 }
 
-async def search_jobs_adzuna(
-    keywords: list[str] = None,
-    countries: list[str] = None,
-    max_per_query: int = 10,
+# ──────────────────────────────────────────────────────────────
+# Main Aggregator
+# ──────────────────────────────────────────────────────────────
+
+async def fetch_all_jobs(
+    keywords: list[str] | None = None,
+    countries: list[str] | None = None,
 ) -> list[dict]:
-    """Search Adzuna for ML/AI jobs. Returns normalized job list."""
-    if not settings.adzuna_app_id or not settings.adzuna_api_key:
-        return _mock_jobs()  # Return mock data if no API key
+    """
+    Fetch jobs from all enabled providers.
+    Returns deduplicated normalized jobs.
+    """
 
     keywords = keywords or ML_KEYWORDS[:3]
     countries = countries or settings.job_search_countries
+
+    all_jobs = []
+
+    # Adzuna
+    adzuna_jobs = await search_jobs_adzuna(
+        keywords=keywords,
+        countries=countries,
+    )
+
+    all_jobs.extend(adzuna_jobs)
+
+    # SerpAPI
+    if settings.serpapi_key:
+        for keyword in keywords[:2]:
+            serp_jobs = await search_jobs_serpapi(keyword)
+            all_jobs.extend(serp_jobs)
+
+    # Deduplicate
+    deduped = {}
+    for job in all_jobs:
+        deduped[job["external_id"]] = job
+
+    final_jobs = list(deduped.values())
+
+    print(f"[Jobs] Aggregated {len(final_jobs)} jobs")
+
+    return final_jobs if final_jobs else _mock_jobs()
+
+
+# ──────────────────────────────────────────────────────────────
+# Adzuna
+# ──────────────────────────────────────────────────────────────
+
+async def search_jobs_adzuna(
+    keywords: list[str] | None = None,
+    countries: list[str] | None = None,
+    max_per_query: int = 10,
+) -> list[dict]:
+    """
+    Search Adzuna for AI/ML jobs.
+    """
+
+    if not settings.adzuna_app_id or not settings.adzuna_api_key:
+        print("[Adzuna] Missing API keys — using mock jobs")
+        return _mock_jobs()
+
+    keywords = keywords or ML_KEYWORDS[:3]
+    countries = countries or settings.job_search_countries
+
     results = []
     seen_ids = set()
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with httpx.AsyncClient(timeout=20.0) as client:
+
         for country in countries:
-            for kw in keywords[:2]:  # Limit to avoid rate limits
+
+            for keyword in keywords[:2]:
+
                 try:
-                    resp = await client.get(
+                    response = await client.get(
                         f"{ADZUNA_BASE}/{country}/search/1",
                         params={
                             "app_id": settings.adzuna_app_id,
                             "app_key": settings.adzuna_api_key,
-                            "what": kw,
+                            "what": keyword,
                             "results_per_page": max_per_query,
-                            "content-type": "application/json",
                             "sort_by": "date",
+                            "content-type": "application/json",
                         }
                     )
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        for job in data.get("results", []):
-                            ext_id = job.get("id", "")
-                            if ext_id in seen_ids:
-                                continue
-                            seen_ids.add(ext_id)
-                            results.append(_normalize_adzuna(job, country))
-                except Exception as e:
-                    print(f"Adzuna error ({country}/{kw}): {e}")
-                    continue
 
-    return results if results else _mock_jobs()
+                    if response.status_code != 200:
+                        print(
+                            f"[Adzuna] Failed "
+                            f"{country}/{keyword} "
+                            f"({response.status_code})"
+                        )
+                        continue
+
+                    data = response.json()
+
+                    for raw_job in data.get("results", []):
+
+                        ext_id = f"adzuna_{raw_job.get('id', '')}"
+
+                        if ext_id in seen_ids:
+                            continue
+
+                        seen_ids.add(ext_id)
+
+                        results.append(
+                            _normalize_adzuna(raw_job, country)
+                        )
+
+                except Exception as e:
+                    print(f"[Adzuna] Error ({country}/{keyword}): {e}")
+
+    return results
 
 
 def _normalize_adzuna(job: dict, country: str) -> dict:
-    salary = job.get("salary_min"), job.get("salary_max")
+
+    title = job.get("title", "")
+    description = job.get("description", "")
+
     return {
         "external_id": f"adzuna_{job.get('id', '')}",
-        "title": job.get("title", ""),
-        "company": job.get("company", {}).get("display_name", "Unknown"),
-        "location": job.get("location", {}).get("display_name", COUNTRY_MAP.get(country, country)),
-        "description": job.get("description", ""),
+
+        "title": title,
+
+        "company": (
+            job.get("company", {})
+            .get("display_name", "Unknown")
+        ),
+
+        "location": (
+            job.get("location", {})
+            .get(
+                "display_name",
+                COUNTRY_MAP.get(country, country)
+            )
+        ),
+
+        "description": description,
+
         "apply_url": job.get("redirect_url", ""),
+
         "source": "adzuna",
-        "salary_min": salary[0],
-        "salary_max": salary[1],
-        "remote": "remote" in job.get("title", "").lower() or "remote" in job.get("description", "").lower(),
-        "posted_at": job.get("created", datetime.utcnow().isoformat()),
+
+        "salary_min": job.get("salary_min"),
+
+        "salary_max": job.get("salary_max"),
+
+        "remote": (
+            "remote" in title.lower()
+            or "remote" in description.lower()
+            or "hybrid" in description.lower()
+        ),
+
+        "posted_at": (
+            job.get("created")
+            or datetime.utcnow().isoformat()
+        ),
+
         "country": country,
     }
 
 
-async def search_jobs_serpapi(keyword: str = "machine learning engineer") -> list[dict]:
-    """Google Jobs via SerpAPI — richer results, requires paid key."""
+# ──────────────────────────────────────────────────────────────
+# SerpAPI Google Jobs
+# ──────────────────────────────────────────────────────────────
+
+async def search_jobs_serpapi(
+    keyword: str = "machine learning engineer"
+) -> list[dict]:
+
     if not settings.serpapi_key:
         return []
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with httpx.AsyncClient(timeout=20.0) as client:
+
         try:
-            resp = await client.get(
+            response = await client.get(
                 "https://serpapi.com/search",
                 params={
                     "engine": "google_jobs",
@@ -106,102 +233,124 @@ async def search_jobs_serpapi(keyword: str = "machine learning engineer") -> lis
                     "chips": "date_posted:today",
                 }
             )
-            if resp.status_code == 200:
-                data = resp.json()
-                return [_normalize_serpapi(j) for j in data.get("jobs_results", [])]
+
+            if response.status_code != 200:
+                print(f"[SerpAPI] Failed ({response.status_code})")
+                return []
+
+            data = response.json()
+
+            return [
+                _normalize_serpapi(job)
+                for job in data.get("jobs_results", [])
+            ]
+
         except Exception as e:
-            print(f"SerpAPI error: {e}")
+            print(f"[SerpAPI] Error: {e}")
+
     return []
 
 
 def _normalize_serpapi(job: dict) -> dict:
+
+    location = job.get("location", "")
+
     return {
-        "external_id": f"serp_{job.get('job_id', job.get('title','')[:20])}",
+        "external_id": (
+            f"serp_{job.get('job_id', '')}"
+        ),
+
         "title": job.get("title", ""),
+
         "company": job.get("company_name", ""),
-        "location": job.get("location", ""),
+
+        "location": location,
+
         "description": job.get("description", ""),
-        "apply_url": (job.get("related_links") or [{}])[0].get("link", ""),
+
+        "apply_url": (
+            (job.get("related_links") or [{}])[0]
+            .get("link", "")
+        ),
+
         "source": "google_jobs",
+
         "salary_min": None,
+
         "salary_max": None,
-        "remote": "remote" in job.get("location", "").lower(),
+
+        "remote": (
+            "remote" in location.lower()
+            or "hybrid" in location.lower()
+        ),
+
         "posted_at": datetime.utcnow().isoformat(),
+
         "country": "global",
     }
 
 
+# ──────────────────────────────────────────────────────────────
+# Demo fallback jobs
+# ──────────────────────────────────────────────────────────────
+
 def _mock_jobs() -> list[dict]:
-    """Demo jobs shown when no API keys are configured."""
+
+    now = datetime.utcnow().isoformat()
+
     return [
         {
             "external_id": "mock_001",
             "title": "Machine Learning Engineer",
             "company": "Instabug",
             "location": "Cairo, Egypt (Hybrid)",
-            "description": "Build and deploy ML models for crash detection and user behavior analysis. Requirements: PyTorch, Python, MLOps experience, experience with NLP or anomaly detection preferred. 2+ years experience.",
+            "description": (
+                "Build and deploy ML models for crash detection "
+                "and user behavior analysis using PyTorch, NLP, "
+                "and MLOps pipelines."
+            ),
             "apply_url": "https://instabug.com/careers",
             "source": "demo",
             "salary_min": 25000,
             "salary_max": 45000,
             "remote": False,
-            "posted_at": datetime.utcnow().isoformat(),
+            "posted_at": now,
             "country": "eg",
         },
+
         {
             "external_id": "mock_002",
             "title": "AI Engineer – Computer Vision",
             "company": "Valeo Egypt",
             "location": "Cairo, Egypt",
-            "description": "Develop real-time computer vision systems for ADAS (Advanced Driver Assistance Systems). YOLOv8, OpenCV, TensorRT, Python. Experience with BDD100K or similar autonomous driving datasets is a strong plus.",
+            "description": (
+                "Develop real-time computer vision systems "
+                "using YOLOv8, OpenCV, TensorRT, and Python."
+            ),
             "apply_url": "https://valeo.com/careers",
             "source": "demo",
             "salary_min": 30000,
             "salary_max": 55000,
             "remote": False,
-            "posted_at": datetime.utcnow().isoformat(),
+            "posted_at": now,
             "country": "eg",
         },
+
         {
             "external_id": "mock_003",
             "title": "LLM / RAG Engineer",
-            "company": "Wuzzuf (Remote)",
+            "company": "Wuzzuf",
             "location": "Remote – Egypt / MENA",
-            "description": "Build RAG pipelines, LLM integrations, and AI-powered search for our job platform. LangChain, ChromaDB, FastAPI, LLaMA/GPT APIs, vector databases. Prior production RAG experience required.",
+            "description": (
+                "Build RAG pipelines, vector search systems, "
+                "LangChain integrations, and FastAPI AI services."
+            ),
             "apply_url": "https://wuzzuf.net/careers",
             "source": "demo",
             "salary_min": 35000,
             "salary_max": 60000,
             "remote": True,
-            "posted_at": datetime.utcnow().isoformat(),
-            "country": "eg",
-        },
-        {
-            "external_id": "mock_004",
-            "title": "Junior ML Engineer",
-            "company": "Breadfast",
-            "location": "Cairo, Egypt",
-            "description": "Demand forecasting, recommendation systems, and supply chain ML. Python, scikit-learn, time-series (ARIMA, LSTM), SQL. We value people who ship end-to-end not just notebooks.",
-            "apply_url": "https://breadfast.com/careers",
-            "source": "demo",
-            "salary_min": 20000,
-            "salary_max": 35000,
-            "remote": False,
-            "posted_at": datetime.utcnow().isoformat(),
-            "country": "eg",
-        },
-        {
-            "external_id": "mock_005",
-            "title": "NLP Engineer",
-            "company": "Vodafone Egypt",
-            "location": "Cairo, Egypt (On-site)",
-            "description": "Build Arabic NLP models for customer support automation. Transformers, BERT/AraBERT, Hugging Face, FastAPI. Experience with Arabic language processing is a plus.",
-            "apply_url": "https://vodafone.com.eg/careers",
-            "source": "demo",
-            "salary_min": 28000,
-            "salary_max": 48000,
-            "remote": False,
-            "posted_at": datetime.utcnow().isoformat(),
+            "posted_at": now,
             "country": "eg",
         },
     ]
