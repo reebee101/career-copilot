@@ -79,8 +79,8 @@ async def score_cv_against_jd(cv_text: str, jd_text: str) -> dict:
 - match_score (integer 0-100)
 - matched_keywords (array of strings found in both CV and JD)
 - missing_keywords (array of important JD keywords missing from CV)
-- tailored_bullets (array of 3 CV bullets rewritten specifically for this JD)
-- recommendation (string, 2-3 sentences of concrete actionable advice)"""
+- tailored_bullets (array of 5 CV bullets rewritten specifically for this JD)
+- recommendation (string, 4-5 sentences of concrete actionable advice)"""
 
     return _chat_json([
         {"role": "system", "content": system},

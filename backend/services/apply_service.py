@@ -25,14 +25,6 @@ async def detect_ats(url: str) -> str:
     url_lower = url.lower()
     if "linkedin.com" in url_lower:
         return "linkedin"
-    elif "greenhouse.io" in url_lower or "boards.greenhouse" in url_lower:
-        return "greenhouse"
-    elif "lever.co" in url_lower:
-        return "lever"
-    elif "workday.com" in url_lower:
-        return "workday"
-    elif "smartrecruiters.com" in url_lower:
-        return "smartrecruiters"
     else:
         return "unknown"
 
@@ -62,10 +54,6 @@ async def auto_apply(
         try:
             if ats == "linkedin":
                 result = await _apply_linkedin(page, apply_url, cv_path, cover_letter, candidate)
-            elif ats == "greenhouse":
-                result = await _apply_greenhouse(page, apply_url, cv_path, cover_letter, candidate)
-            elif ats == "lever":
-                result = await _apply_lever(page, apply_url, cv_path, cover_letter, candidate)
             else:
                 # Generic form filler
                 result = await _apply_generic(page, apply_url, cv_path, cover_letter, candidate)
@@ -121,87 +109,6 @@ async def _apply_linkedin(page, url, cv_path, cover_letter, candidate) -> AutoAp
         return AutoApplyResult(True, "Applied via LinkedIn Easy Apply")
     else:
         return AutoApplyResult(False, "Could not find Submit button — multi-step or CAPTCHA blocking.")
-
-
-async def _apply_greenhouse(page, url, cv_path, cover_letter, candidate) -> AutoApplyResult:
-    await page.goto(url, wait_until="networkidle", timeout=20000)
-
-    # Fill standard Greenhouse fields
-    field_map = {
-        "input#first_name, input[name='job_application[first_name]']": candidate.get("first_name", ""),
-        "input#last_name, input[name='job_application[last_name]']": candidate.get("last_name", ""),
-        "input#email, input[name='job_application[email]']": candidate.get("email", ""),
-        "input#phone, input[name='job_application[phone]']": candidate.get("phone", ""),
-    }
-
-    for selector, value in field_map.items():
-        try:
-            field = page.locator(selector)
-            if await field.count() and value:
-                await field.first.fill(value)
-        except Exception:
-            pass
-
-    # Cover letter
-    cover_field = page.locator("textarea[name*='cover'], #cover_letter_text")
-    if await cover_field.count() and cover_letter:
-        await cover_field.first.fill(cover_letter)
-
-    # Upload CV
-    if cv_path:
-        upload = page.locator("input[type='file'][name*='resume'], input[type='file'][id*='resume']")
-        if await upload.count():
-            await upload.first.set_input_files(cv_path)
-            await page.wait_for_timeout(1500)
-
-    # LinkedIn URL
-    linkedin_field = page.locator("input[name*='linkedin'], input[placeholder*='LinkedIn']")
-    if await linkedin_field.count() and candidate.get("linkedin_url"):
-        await linkedin_field.first.fill(candidate["linkedin_url"])
-
-    # Submit
-    submit = page.locator("input[type='submit'], button[type='submit'], button:has-text('Submit')")
-    if await submit.count():
-        await submit.first.click()
-        await page.wait_for_timeout(2000)
-        return AutoApplyResult(True, "Applied via Greenhouse")
-    return AutoApplyResult(False, "Could not submit Greenhouse application.")
-
-
-async def _apply_lever(page, url, cv_path, cover_letter, candidate) -> AutoApplyResult:
-    await page.goto(url, wait_until="networkidle", timeout=20000)
-
-    fields = {
-        "input[name='name']": candidate.get("name", ""),
-        "input[name='email']": candidate.get("email", ""),
-        "input[name='phone']": candidate.get("phone", ""),
-        "input[name='urls[LinkedIn]'], input[placeholder*='LinkedIn']": candidate.get("linkedin_url", ""),
-    }
-    for selector, value in fields.items():
-        try:
-            f = page.locator(selector)
-            if await f.count() and value:
-                await f.first.fill(value)
-        except Exception:
-            pass
-
-    if cover_letter:
-        cl = page.locator("textarea[name='comments'], textarea[placeholder*='cover']")
-        if await cl.count():
-            await cl.first.fill(cover_letter)
-
-    if cv_path:
-        upload = page.locator("input[type='file']")
-        if await upload.count():
-            await upload.first.set_input_files(cv_path)
-            await page.wait_for_timeout(1500)
-
-    submit = page.locator("button[type='submit'], input[type='submit']")
-    if await submit.count():
-        await submit.first.click()
-        await page.wait_for_timeout(2000)
-        return AutoApplyResult(True, "Applied via Lever")
-    return AutoApplyResult(False, "Could not submit Lever application.")
 
 
 async def _apply_generic(page, url, cv_path, cover_letter, candidate) -> AutoApplyResult:
