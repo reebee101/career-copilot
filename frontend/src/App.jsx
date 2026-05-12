@@ -1,33 +1,18 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Upload, LayoutDashboard, Search, FileText, List, Mic, Award, Zap, RefreshCw, ChevronRight, X, Check, AlertCircle, Loader, ExternalLink, Bot, Briefcase, TrendingUp, Target, Send } from 'lucide-react'
+import { Upload, LayoutDashboard, Search, FileText, List, Mic, Award, Zap, RefreshCw, ChevronRight, X, Check, AlertCircle, Loader, ExternalLink, Bot, Briefcase, TrendingUp, Target, Send, PlusCircle, LogIn } from 'lucide-react'
 import * as api from './api'
 
-const STATUS_COLORS = {
-  saved: 'badge-gray',
-  applied: 'badge-purple',
-  interview: 'badge-green',
-  offer: 'badge-green',
-  rejected: 'badge-coral',
-}
-
-const STATUS_LABELS = {
-  saved: 'Saved',
-  applied: 'Applied',
-  interview: 'Interview',
-  offer: 'Offer 🎉',
-  rejected: 'Rejected',
-}
+const STATUS_COLORS = { saved: 'badge-gray', applied: 'badge-purple', interview: 'badge-green', offer: 'badge-green', rejected: 'badge-coral' }
+const STATUS_LABELS = { saved: 'Saved', applied: 'Applied', interview: 'Interview', offer: 'Offer 🎉', rejected: 'Rejected' }
 
 function ScoreRing({ score, size = 90 }) {
-  const r = 36; const circ = 2 * Math.PI * r
-  const offset = circ - (score / 100) * circ
+  const r = 36, circ = 2 * Math.PI * r, offset = circ - (score / 100) * circ
   const color = score >= 80 ? '#1D9E75' : score >= 60 ? '#EF9F27' : '#D85A30'
   return (
     <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
       <svg width={size} height={size} viewBox="0 0 90 90" style={{ transform: 'rotate(-90deg)' }}>
         <circle cx="45" cy="45" r={r} fill="none" stroke="#E5E7EB" strokeWidth="8" />
-        <circle cx="45" cy="45" r={r} fill="none" stroke={color} strokeWidth="8"
-          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
+        <circle cx="45" cy="45" r={r} fill="none" stroke={color} strokeWidth="8" strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
       </svg>
       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         <span style={{ fontSize: 20, fontWeight: 600, color: '#111827' }}>{score}</span>
@@ -37,15 +22,16 @@ function ScoreRing({ score, size = 90 }) {
   )
 }
 
-function Spinner() {
-  return <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
-}
+function Spinner() { return <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> }
 
-// ── UPLOAD SCREEN ──────────────────────────────────────────────
+// ── UPLOAD / LOGIN SCREEN ──────────────────────────────────────
 function UploadScreen({ onUploaded }) {
   const [dragging, setDragging] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [sessionInput, setSessionInput] = useState('')
+  const [showLogin, setShowLogin] = useState(false)
+  const [loginLoading, setLoginLoading] = useState(false)
 
   const handleFile = async (file) => {
     if (!file) return
@@ -53,13 +39,20 @@ function UploadScreen({ onUploaded }) {
     try {
       const result = await api.uploadCV(file)
       localStorage.setItem('session_id', result.session_id)
-      localStorage.setItem('cv_name', result.name || 'Your CV')
       onUploaded(result)
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
+    } catch (e) { setError(e.message) }
+    finally { setLoading(false) }
+  }
+
+  const handleLogin = async () => {
+    if (!sessionInput.trim()) return
+    setLoginLoading(true); setError('')
+    try {
+      const profile = await api.getProfile(sessionInput.trim())
+      localStorage.setItem('session_id', sessionInput.trim())
+      onUploaded(profile)
+    } catch (e) { setError('Session not found. Please upload your CV.') }
+    finally { setLoginLoading(false) }
   }
 
   return (
@@ -71,51 +64,70 @@ function UploadScreen({ onUploaded }) {
           </div>
           <div style={{ textAlign: 'left' }}>
             <div style={{ fontSize: 20, fontWeight: 600 }}>AI Career Copilot</div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>ML/AI Job Hunt — Powered by Groq</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Powered by Groq</div>
           </div>
         </div>
 
         <div className="card" style={{ padding: '2rem' }}>
-          <div
-            onDragOver={e => { e.preventDefault(); setDragging(true) }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={e => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]) }}
-            onClick={() => document.getElementById('cv-input').click()}
-            style={{
-              border: `2px dashed ${dragging ? 'var(--accent)' : 'var(--border)'}`,
-              borderRadius: 'var(--radius)',
-              padding: '2.5rem 1.5rem',
-              cursor: 'pointer',
-              background: dragging ? 'var(--accent-light)' : 'var(--border-light)',
-              transition: 'all 0.15s',
-              marginBottom: '1rem',
-            }}
-          >
-            {loading ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                <Loader size={32} color="var(--accent)" style={{ animation: 'spin 1s linear infinite' }} />
-                <div style={{ fontWeight: 500 }}>Analyzing your CV…</div>
-                <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>This takes ~10 seconds</div>
+          {!showLogin ? (
+            <>
+              <div
+                onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={e => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]) }}
+                onClick={() => document.getElementById('cv-input').click()}
+                style={{ border: `2px dashed ${dragging ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 'var(--radius)', padding: '2.5rem 1.5rem', cursor: 'pointer', background: dragging ? 'var(--accent-light)' : 'var(--border-light)', transition: 'all 0.15s', marginBottom: '1rem' }}
+              >
+                {loading ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                    <Loader size={32} color="var(--accent)" style={{ animation: 'spin 1s linear infinite' }} />
+                    <div style={{ fontWeight: 500 }}>Analyzing your CV…</div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>This takes ~15 seconds</div>
+                  </div>
+                ) : (
+                  <>
+                    <Upload size={32} color="var(--accent)" style={{ marginBottom: 10 }} />
+                    <div style={{ fontWeight: 500, marginBottom: 4 }}>Drop your CV here</div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>PDF, DOCX, or TXT · Max 5MB</div>
+                  </>
+                )}
               </div>
-            ) : (
-              <>
-                <Upload size={32} color="var(--accent)" style={{ marginBottom: 10 }} />
-                <div style={{ fontWeight: 500, marginBottom: 4 }}>Drop your CV here</div>
-                <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>PDF, DOCX, or TXT · Max 5MB</div>
-              </>
-            )}
-          </div>
-          <input id="cv-input" type="file" accept=".pdf,.docx,.doc,.txt" style={{ display: 'none' }}
-            onChange={e => handleFile(e.target.files[0])} />
+              <input id="cv-input" type="file" accept=".pdf,.docx,.doc,.txt" style={{ display: 'none' }} onChange={e => handleFile(e.target.files[0])} />
+
+              <button className="btn btn-ghost btn-sm" style={{ width: '100%', marginTop: 8 }} onClick={() => setShowLogin(true)}>
+                <LogIn size={13} /> Already uploaded? Log back in
+              </button>
+            </>
+          ) : (
+            <>
+              <div style={{ fontWeight: 500, marginBottom: 12 }}>Log back in with your Session ID</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                Your Session ID was shown after uploading. Check your browser's localStorage or use the copy button from a previous session.
+              </div>
+              <input
+                placeholder="Paste your session ID (UUID)…"
+                value={sessionInput}
+                onChange={e => setSessionInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                style={{ marginBottom: 10 }}
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleLogin} disabled={loginLoading || !sessionInput.trim()}>
+                  {loginLoading ? <><Spinner /> Loading…</> : <><LogIn size={14} /> Log in</>}
+                </button>
+                <button className="btn btn-ghost" onClick={() => setShowLogin(false)}>Back</button>
+              </div>
+            </>
+          )}
 
           {error && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '10px 12px', background: 'var(--coral-light)', borderRadius: 'var(--radius-sm)', color: 'var(--coral)', fontSize: 13 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '10px 12px', background: 'var(--coral-light)', borderRadius: 'var(--radius-sm)', color: 'var(--coral)', fontSize: 13, marginTop: 10 }}>
               <AlertCircle size={14} /> {error}
             </div>
           )}
 
           <div style={{ marginTop: '1.25rem', padding: '12px 14px', background: 'var(--accent2-light)', borderRadius: 'var(--radius-sm)', fontSize: 13, color: '#3C3489', textAlign: 'left' }}>
-            <strong>What happens:</strong> Your CV is parsed, scored against ATS criteria, missing skills identified, and bullets rewritten — all in one step.
+            <strong>What happens:</strong> Your CV is parsed, scored against ATS criteria, missing skills identified, and bullets rewritten — tailored to your actual experience.
           </div>
         </div>
       </div>
@@ -157,9 +169,7 @@ function Dashboard({ profile, applications }) {
           <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Score breakdown</div>
           {Object.entries(breakdown).map(([k, v]) => (
             <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
-              <div style={{ fontSize: 12, width: 130, color: 'var(--text-secondary)', flexShrink: 0 }}>
-                {k.replace(/_/g, ' ')}
-              </div>
+              <div style={{ fontSize: 12, width: 130, color: 'var(--text-secondary)', flexShrink: 0 }}>{k.replace(/_/g, ' ')}</div>
               <div style={{ flex: 1, height: 5, background: 'var(--border-light)', borderRadius: 3, overflow: 'hidden' }}>
                 <div style={{ width: `${v}%`, height: '100%', background: v >= 70 ? 'var(--accent)' : v >= 50 ? 'var(--amber)' : 'var(--coral)', borderRadius: 3 }} />
               </div>
@@ -181,9 +191,12 @@ function Dashboard({ profile, applications }) {
         </div>
         <div className="card">
           <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Critical gaps</div>
+          {(analysis.critical_gaps || []).length === 0 && (
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Re-upload your CV to generate gap analysis.</div>
+          )}
           {(analysis.critical_gaps || []).map((g, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 7, fontSize: 13 }}>
-              <span className={`badge badge-${g.severity === 'critical' ? 'coral' : g.severity === 'moderate' ? 'amber' : 'gray'}`} style={{ flexShrink: 0 }}>{g.severity}</span>
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8, fontSize: 13 }}>
+              <span className={`badge badge-${g.severity === 'critical' ? 'coral' : g.severity === 'moderate' ? 'amber' : 'gray'}`} style={{ flexShrink: 0, marginTop: 1 }}>{g.severity}</span>
               <div>
                 <div style={{ fontWeight: 500 }}>{g.skill}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{g.reason}</div>
@@ -206,34 +219,33 @@ function JDAnalyzer({ sessionId, onCreateApp }) {
   const [coverLetter, setCoverLetter] = useState('')
   const [loadingCL, setLoadingCL] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [activeTab, setActiveTab] = useState('match')
 
   const analyze = async () => {
     if (!jd.trim()) return
-    setLoading(true); setResult(null); setCoverLetter('')
-    try {
-      const r = await api.scoreAgainstJD(sessionId, jd, company, role)
-      setResult(r)
-    } catch (e) { alert(e.message) }
+    setLoading(true); setResult(null); setCoverLetter(''); setSaved(false)
+    try { setResult(await api.scoreAgainstJD(sessionId, jd, company, role)) }
+    catch (e) { alert(e.message) }
     finally { setLoading(false) }
   }
 
   const genCL = async () => {
     setLoadingCL(true)
-    try {
-      const r = await api.generateCoverLetter(sessionId, jd, company, role)
-      setCoverLetter(r.cover_letter)
-    } catch (e) { alert(e.message) }
+    try { const r = await api.generateCoverLetter(sessionId, jd, company, role); setCoverLetter(r.cover_letter) }
+    catch (e) { alert(e.message) }
     finally { setLoadingCL(false) }
   }
 
   const saveApp = async () => {
-    try {
-      await onCreateApp(company, role, '', jd)
-      setSaved(true)
-    } catch (e) { alert(e.message) }
+    try { await onCreateApp(company, role, '', jd); setSaved(true) }
+    catch (e) { alert(e.message) }
   }
 
-  const matchColor = (score) => score >= 75 ? 'var(--accent)' : score >= 55 ? 'var(--amber)' : 'var(--coral)'
+  const tabs = [
+    { id: 'match', label: 'Match Analysis' },
+    { id: 'rewrite', label: 'Rewritten CV' },
+    { id: 'cover', label: 'Cover Letter' },
+  ]
 
   return (
     <div>
@@ -244,7 +256,7 @@ function JDAnalyzer({ sessionId, onCreateApp }) {
         </div>
         <textarea placeholder="Paste the full job description here…" value={jd} onChange={e => setJd(e.target.value)} style={{ minHeight: 140, marginBottom: 10 }} />
         <button className="btn btn-primary" onClick={analyze} disabled={!jd.trim() || loading}>
-          {loading ? <><Spinner /> Analyzing…</> : <><Target size={14} /> Score & Analyze</>}
+          {loading ? <><Spinner /> Analyzing…</> : <><Target size={14} /> Score & Rewrite CV for this role</>}
         </button>
       </div>
 
@@ -260,7 +272,7 @@ function JDAnalyzer({ sessionId, onCreateApp }) {
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 10 }}>{result.application_strategy}</div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <button className="btn btn-primary btn-sm" onClick={genCL} disabled={loadingCL}>
-                  {loadingCL ? <><Spinner /> Generating…</> : <><FileText size={13} /> Cover Letter</>}
+                  {loadingCL ? <><Spinner /> Generating…</> : <><FileText size={13} /> Generate Cover Letter</>}
                 </button>
                 <button className="btn btn-secondary btn-sm" onClick={saveApp} disabled={saved}>
                   {saved ? <><Check size={13} /> Saved!</> : <><List size={13} /> Save to Tracker</>}
@@ -269,35 +281,84 @@ function JDAnalyzer({ sessionId, onCreateApp }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-            <div className="card">
-              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>Matched keywords</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                {(result.matched_keywords || []).map((k, i) => <span key={i} className="badge badge-green">{k}</span>)}
-              </div>
-            </div>
-            <div className="card">
-              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>Missing keywords</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                {(result.missing_keywords || []).map((k, i) => <span key={i} className="badge badge-coral">{k}</span>)}
-              </div>
-            </div>
-          </div>
-
-          <div className="card" style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>Tailored bullets to add</div>
-            {(result.tailored_bullets || []).map((b, i) => (
-              <div key={i} style={{ fontSize: 13, padding: '8px 12px', background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)', borderLeft: '2px solid var(--accent)', marginBottom: 6 }}>• {b}</div>
+          {/* Tab switcher */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 10, borderBottom: '1px solid var(--border-light)', paddingBottom: 0 }}>
+            {tabs.map(t => (
+              <button key={t.id} onClick={() => setActiveTab(t.id)}
+                style={{ padding: '7px 14px', fontSize: 13, fontWeight: activeTab === t.id ? 600 : 400, color: activeTab === t.id ? 'var(--accent)' : 'var(--text-secondary)', background: 'transparent', border: 'none', borderBottom: activeTab === t.id ? '2px solid var(--accent)' : '2px solid transparent', cursor: 'pointer', marginBottom: -1 }}>
+                {t.label}
+              </button>
             ))}
           </div>
 
-          {coverLetter && (
-            <div className="card">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Cover letter</div>
-                <button className="btn btn-ghost btn-sm" onClick={() => navigator.clipboard.writeText(coverLetter)}>Copy</button>
+          {activeTab === 'match' && (
+            <div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                <div className="card">
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>Matched keywords</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {(result.matched_keywords || []).map((k, i) => <span key={i} className="badge badge-green">{k}</span>)}
+                  </div>
+                </div>
+                <div className="card">
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>Missing keywords</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {(result.missing_keywords || []).map((k, i) => <span key={i} className="badge badge-coral">{k}</span>)}
+                  </div>
+                </div>
               </div>
-              <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', color: 'var(--text)' }}>{coverLetter}</div>
+              <div className="card">
+                <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>Tailored bullets to add</div>
+                {(result.tailored_bullets || []).map((b, i) => (
+                  <div key={i} style={{ fontSize: 13, padding: '8px 12px', background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)', borderLeft: '2px solid var(--accent)', marginBottom: 6 }}>• {b}</div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'rewrite' && result.rewritten_cv_sections && (
+            <div>
+              <div className="card" style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>Rewritten summary for this role</div>
+                <div style={{ fontSize: 13, lineHeight: 1.7, padding: '10px 12px', background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)', borderLeft: '2px solid var(--accent)' }}>
+                  {result.rewritten_cv_sections.summary}
+                </div>
+                <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={() => navigator.clipboard.writeText(result.rewritten_cv_sections.summary)}>Copy</button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div className="card">
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>Highlight these skills</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {(result.rewritten_cv_sections.skills_to_highlight || []).map((s, i) => <span key={i} className="badge badge-green">{s}</span>)}
+                  </div>
+                </div>
+                <div className="card">
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>Learn before applying</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {(result.rewritten_cv_sections.skills_to_add || []).map((s, i) => <span key={i} className="badge badge-amber">{s}</span>)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'cover' && (
+            <div className="card">
+              {coverLetter ? (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Cover letter</div>
+                    <button className="btn btn-ghost btn-sm" onClick={() => navigator.clipboard.writeText(coverLetter)}>Copy</button>
+                  </div>
+                  <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', color: 'var(--text)' }}>{coverLetter}</div>
+                </>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '2rem' }}>
+                  <button className="btn btn-primary" onClick={genCL} disabled={loadingCL}>
+                    {loadingCL ? <><Spinner /> Generating…</> : <><FileText size={14} /> Generate Cover Letter</>}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -318,58 +379,36 @@ function JobsBoard({ sessionId, onCreateApp }) {
     setLoading(true)
     try {
       const remoteOnly = region === 'remote'
-      const country = region === 'egypt' ? 'egypt' : region === 'remote' ? null : null
+      const country = region === 'egypt' ? 'egypt' : null
       const j = await api.fetchJobs(remoteOnly, country)
       const filtered = region === 'egypt'
-        ? j.filter(job => job.location?.toLowerCase().includes('egypt') || job.country === 'eg' || job.source === 'demo')
+        ? j.filter(job => job.location?.toLowerCase().includes('egypt') || job.country === 'eg' || job.source === 'wuzzuf' || job.source === 'linkedin' || job.source === 'demo')
         : region === 'remote'
         ? j.filter(job => job.remote)
         : j
       setJobs(filtered)
-    }
-    catch (e) { console.error(e) }
+    } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }, [region])
 
-  useEffect(() => { load() }, [load, region])
+  useEffect(() => { load() }, [load])
 
   const refresh = async () => {
     setRefreshing(true)
     await api.refreshJobs()
+    await new Promise(r => setTimeout(r, 3000))
     await load()
     setRefreshing(false)
   }
 
-  const addToTracker = async (job) => {
-    try {
-      await onCreateApp(job.company, job.title, job.apply_url, job.description_full)
-      alert(`"${job.title}" at ${job.company} added to your tracker!`)
-    } catch (e) { alert(e.message) }
-  }
+  const sourceColor = { wuzzuf: 'badge-amber', linkedin: 'badge-purple', adzuna: 'badge-green', google_jobs: 'badge-green', demo: 'badge-gray' }
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: selected ? '1fr 1.3fr' : '1fr', gap: 10 }}>
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-          {[
-            { value: 'egypt', label: '🇪🇬 Egypt' },
-            { value: 'remote', label: '🌐 Remote' },
-            { value: 'worldwide', label: '🌍 Worldwide' },
-          ].map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => setRegion(opt.value)}
-              style={{
-                padding: '5px 12px',
-                borderRadius: 20,
-                border: region === opt.value ? '1.5px solid var(--accent)' : '1.5px solid var(--border-light)',
-                background: region === opt.value ? 'var(--accent-light)' : 'transparent',
-                color: region === opt.value ? 'var(--accent)' : 'var(--text-secondary)',
-                fontSize: 12,
-                fontWeight: region === opt.value ? 600 : 400,
-                cursor: 'pointer',
-              }}
-            >
+          {[{ value: 'egypt', label: '🇪🇬 Egypt' }, { value: 'remote', label: '🌐 Remote' }, { value: 'worldwide', label: '🌍 Worldwide' }].map(opt => (
+            <button key={opt.value} onClick={() => setRegion(opt.value)} style={{ padding: '5px 12px', borderRadius: 20, border: region === opt.value ? '1.5px solid var(--accent)' : '1.5px solid var(--border-light)', background: region === opt.value ? 'var(--accent-light)' : 'transparent', color: region === opt.value ? 'var(--accent)' : 'var(--text-secondary)', fontSize: 12, fontWeight: region === opt.value ? 600 : 400, cursor: 'pointer' }}>
               {opt.label}
             </button>
           ))}
@@ -381,25 +420,26 @@ function JobsBoard({ sessionId, onCreateApp }) {
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}><Spinner /></div>
+        ) : jobs.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+            No jobs found. Try refreshing or switching region.
+          </div>
         ) : (
           jobs.map(job => (
-            <div key={job.id} className="card"
-              style={{ marginBottom: 8, cursor: 'pointer', border: selected?.id === job.id ? '1px solid var(--accent)' : undefined }}
-              onClick={() => setSelected(selected?.id === job.id ? null : job)}
-            >
+            <div key={job.id} className="card" style={{ marginBottom: 8, cursor: 'pointer', border: selected?.id === job.id ? '1px solid var(--accent)' : undefined }} onClick={() => setSelected(selected?.id === job.id ? null : job)}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, marginBottom: 2 }}>{job.title}</div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{job.company} · {job.location}</div>
                   {(job.salary_min || job.salary_max) && (
                     <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 4 }}>
-                      {job.salary_min && job.salary_max ? `${Math.round(job.salary_min/1000)}k – ${Math.round(job.salary_max/1000)}k EGP` : ''}
+                      {job.salary_min && job.salary_max ? `${Math.round(job.salary_min / 1000)}k – ${Math.round(job.salary_max / 1000)}k` : ''}
                     </div>
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
                   {job.remote && <span className="badge badge-green">Remote</span>}
-                  <span className="badge badge-gray">{job.source}</span>
+                  <span className={`badge ${sourceColor[job.source] || 'badge-gray'}`}>{job.source}</span>
                 </div>
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
@@ -423,7 +463,7 @@ function JobsBoard({ sessionId, onCreateApp }) {
             {selected.description_full || selected.description}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-primary btn-sm" onClick={() => addToTracker(selected)}>
+            <button className="btn btn-primary btn-sm" onClick={async () => { await onCreateApp(selected.company, selected.title, selected.apply_url, selected.description_full); alert(`Added to tracker!`) }}>
               <List size={13} /> Add to Tracker
             </button>
             {selected.apply_url && (
@@ -445,6 +485,9 @@ function ApplicationsTracker({ sessionId, applications, onRefresh }) {
   const [linkedinUrl, setLinkedinUrl] = useState('')
   const [applying, setApplying] = useState(null)
   const [selectedApp, setSelectedApp] = useState(null)
+  const [showAddManual, setShowAddManual] = useState(false)
+  const [manualForm, setManualForm] = useState({ company: '', role: '', apply_url: '', notes: '' })
+  const [addingManual, setAddingManual] = useState(false)
 
   const updateStatus = async (appId, status) => {
     try { await api.updateApplicationStatus(appId, status); onRefresh() }
@@ -461,11 +504,21 @@ function ApplicationsTracker({ sessionId, applications, onRefresh }) {
     setApplying(appId)
     try {
       const r = await api.triggerAutoApply(sessionId, appId, phone, linkedinUrl)
-      alert(r.message)
-      setAutoApplyId(null)
-      setTimeout(onRefresh, 3000)
+      alert(r.message); setAutoApplyId(null); setTimeout(onRefresh, 3000)
     } catch (e) { alert(e.message) }
     finally { setApplying(null) }
+  }
+
+  const addManual = async () => {
+    if (!manualForm.company || !manualForm.role) return alert('Company and role are required.')
+    setAddingManual(true)
+    try {
+      await api.createApplication(sessionId, manualForm.company, manualForm.role, manualForm.apply_url, manualForm.notes)
+      setManualForm({ company: '', role: '', apply_url: '', notes: '' })
+      setShowAddManual(false)
+      onRefresh()
+    } catch (e) { alert(e.message) }
+    finally { setAddingManual(false) }
   }
 
   const columns = ['saved', 'applied', 'interview', 'offer', 'rejected']
@@ -473,7 +526,13 @@ function ApplicationsTracker({ sessionId, applications, onRefresh }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+        <button className="btn btn-primary btn-sm" onClick={() => setShowAddManual(true)}>
+          <PlusCircle size={13} /> Add job manually
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
         {columns.map(col => (
           <div key={col} style={{ minWidth: 200, flex: 1 }}>
             <div style={{ fontWeight: 500, fontSize: 12, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -484,9 +543,7 @@ function ApplicationsTracker({ sessionId, applications, onRefresh }) {
                 <div style={{ fontWeight: 600, marginBottom: 2 }}>{app.company}</div>
                 <div style={{ color: 'var(--text-secondary)', marginBottom: 8 }}>{app.role}</div>
                 {app.match_score > 0 && (
-                  <div style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 6 }}>
-                    Match: <strong>{app.match_score}%</strong>
-                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 6 }}>Match: <strong>{app.match_score}%</strong></div>
                 )}
                 <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                   <button className="btn btn-ghost btn-sm" onClick={() => setSelectedApp(app)}>Details</button>
@@ -496,11 +553,7 @@ function ApplicationsTracker({ sessionId, applications, onRefresh }) {
                     </button>
                   )}
                   {col !== 'rejected' && col !== 'offer' && (
-                    <select
-                      style={{ fontSize: 11, padding: '3px 6px', width: 'auto' }}
-                      value={app.status}
-                      onChange={e => updateStatus(app.id, e.target.value)}
-                    >
+                    <select style={{ fontSize: 11, padding: '3px 6px', width: 'auto' }} value={app.status} onChange={e => updateStatus(app.id, e.target.value)}>
                       {columns.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
                     </select>
                   )}
@@ -512,13 +565,34 @@ function ApplicationsTracker({ sessionId, applications, onRefresh }) {
         ))}
       </div>
 
+      {/* Add manual modal */}
+      {showAddManual && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
+          <div className="card" style={{ maxWidth: 440, width: '90%' }}>
+            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>Add job manually</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+              <input placeholder="Company name *" value={manualForm.company} onChange={e => setManualForm(f => ({ ...f, company: e.target.value }))} />
+              <input placeholder="Role / Position *" value={manualForm.role} onChange={e => setManualForm(f => ({ ...f, role: e.target.value }))} />
+              <input placeholder="Application URL (optional)" value={manualForm.apply_url} onChange={e => setManualForm(f => ({ ...f, apply_url: e.target.value }))} />
+              <textarea placeholder="Notes / job description (optional)" value={manualForm.notes} onChange={e => setManualForm(f => ({ ...f, notes: e.target.value }))} style={{ minHeight: 80 }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" onClick={addManual} disabled={addingManual || !manualForm.company || !manualForm.role}>
+                {addingManual ? <><Spinner /> Adding…</> : <><PlusCircle size={14} /> Add to Tracker</>}
+              </button>
+              <button className="btn btn-ghost" onClick={() => setShowAddManual(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Auto-apply modal */}
       {autoApplyId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
           <div className="card" style={{ maxWidth: 420, width: '90%' }}>
             <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Auto-Apply</div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
-              Playwright will fill the application form and submit. Make sure <code>AUTO_APPLY_ENABLED=true</code> is set in your <code>.env</code>.
+              Supports LinkedIn Easy Apply, Wuzzuf, and generic forms. Requires <code>AUTO_APPLY_ENABLED=true</code> in <code>.env</code>.
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
               <input placeholder="Phone number" value={phone} onChange={e => setPhone(e.target.value)} />
@@ -582,13 +656,20 @@ function ApplicationsTracker({ sessionId, applications, onRefresh }) {
 // ── INTERVIEW PREP ─────────────────────────────────────────────
 function InterviewPrep({ sessionId, profile }) {
   const [questions, setQuestions] = useState([])
-  const [role, setRole] = useState('ML Engineer')
+  const [role, setRole] = useState('')
   const [company, setCompany] = useState('')
   const [loading, setLoading] = useState(false)
   const [practicing, setPracticing] = useState(null)
   const [answer, setAnswer] = useState('')
   const [feedback, setFeedback] = useState(null)
   const [loadingFB, setLoadingFB] = useState(false)
+
+  // Pre-fill role from CV analysis
+  useEffect(() => {
+    if (profile?.analysis?.skills?.length) {
+      setRole(profile.analysis.skills[0] ? 'ML Engineer' : '')
+    }
+  }, [profile])
 
   const generate = async () => {
     setLoading(true); setQuestions([])
@@ -605,7 +686,7 @@ function InterviewPrep({ sessionId, profile }) {
     finally { setLoadingFB(false) }
   }
 
-  const catColor = { 'ML design': 'badge-purple', MLOps: 'badge-amber', Fundamentals: 'badge-gray', Behavioral: 'badge-gray', CV: 'badge-green', NLP: 'badge-green' }
+  const catColor = { technical: 'badge-purple', behavioural: 'badge-gray', project: 'badge-green', 'system-design': 'badge-amber' }
 
   return (
     <div>
@@ -614,8 +695,8 @@ function InterviewPrep({ sessionId, profile }) {
           <input placeholder="Role (e.g. ML Engineer)" value={role} onChange={e => setRole(e.target.value)} />
           <input placeholder="Company (optional)" value={company} onChange={e => setCompany(e.target.value)} />
         </div>
-        <button className="btn btn-primary" onClick={generate} disabled={loading}>
-          {loading ? <><Spinner /> Generating…</> : <><Mic size={14} /> Generate questions</>}
+        <button className="btn btn-primary" onClick={generate} disabled={loading || !role}>
+          {loading ? <><Spinner /> Generating…</> : <><Mic size={14} /> Generate questions from my CV</>}
         </button>
       </div>
 
@@ -625,9 +706,7 @@ function InterviewPrep({ sessionId, profile }) {
             <span className={`badge ${catColor[q.category] || 'badge-gray'}`} style={{ flexShrink: 0 }}>{q.category}</span>
             <div style={{ fontWeight: 500 }}>{q.question}</div>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
-            💡 {q.tip}
-          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>💡 {q.tip}</div>
           {practicing === i ? (
             <div>
               <textarea placeholder="Type your answer…" value={answer} onChange={e => setAnswer(e.target.value)} style={{ marginBottom: 8 }} />
@@ -680,37 +759,43 @@ function Upskill({ profile }) {
 
   return (
     <div>
-      <div className="card" style={{ marginBottom: 10 }}>
-        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Certifications (ranked by ROI)</div>
-        {certs.map((c, i) => (
-          <div key={i} style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: i < certs.length - 1 ? '1px solid var(--border-light)' : 'none', alignItems: 'flex-start' }}>
-            <div style={{ width: 28, height: 28, background: 'var(--accent2-light)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600, color: '#3C3489', flexShrink: 0 }}>
-              {c.priority}
+      {certs.length === 0 && projects.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+          Re-upload your CV to get personalized upskill recommendations.
+        </div>
+      )}
+      {certs.length > 0 && (
+        <div className="card" style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Certifications (ranked by ROI for your gaps)</div>
+          {certs.map((c, i) => (
+            <div key={i} style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: i < certs.length - 1 ? '1px solid var(--border-light)' : 'none', alignItems: 'flex-start' }}>
+              <div style={{ width: 28, height: 28, background: 'var(--accent2-light)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600, color: '#3C3489', flexShrink: 0 }}>{c.priority}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 500, marginBottom: 2 }}>{c.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 2 }}>{c.provider} · {c.reason}</div>
+                <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 500 }}>{c.score_impact}</span>
+              </div>
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 500, marginBottom: 2 }}>{c.name}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 2 }}>{c.provider} · {c.reason}</div>
-              <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 500 }}>{c.score_impact}</span>
+          ))}
+        </div>
+      )}
+      {projects.length > 0 && (
+        <div className="card">
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Project ideas to build (tailored to your profile)</div>
+          {projects.map((p, i) => (
+            <div key={i} style={{ padding: '10px 0', borderBottom: i < projects.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+                <div style={{ fontWeight: 500 }}>{p.title}</div>
+                <span className={`badge ${p.difficulty === 'advanced' ? 'badge-coral' : p.difficulty === 'intermediate' ? 'badge-amber' : 'badge-green'}`}>{p.difficulty}</span>
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>{p.description}</div>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                {(p.skills_added || []).map((s, j) => <span key={j} className="badge badge-purple">{s}</span>)}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="card">
-        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Project ideas to build</div>
-        {projects.map((p, i) => (
-          <div key={i} style={{ padding: '10px 0', borderBottom: i < projects.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-              <div style={{ fontWeight: 500 }}>{p.title}</div>
-              <span className={`badge ${p.difficulty === 'advanced' ? 'badge-coral' : p.difficulty === 'intermediate' ? 'badge-amber' : 'badge-green'}`}>{p.difficulty}</span>
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>{p.description}</div>
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-              {(p.skills_added || []).map((s, j) => <span key={j} className="badge badge-purple">{s}</span>)}
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -723,18 +808,21 @@ function BulletRewriter({ profile }) {
       <div style={{ padding: '10px 14px', background: 'var(--accent2-light)', borderRadius: 'var(--radius-sm)', fontSize: 13, color: '#3C3489', marginBottom: 12 }}>
         Every bullet rewritten with: <strong>Action verb → Metric → Business impact</strong>. Copy the improved versions into your CV.
       </div>
+      {bullets.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+          Re-upload your CV to see rewritten bullets.
+        </div>
+      )}
       {bullets.map((b, i) => (
         <div key={i} className="card" style={{ marginBottom: 8 }}>
           <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', marginBottom: 4 }}>BEFORE</div>
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '8px 12px', background: 'var(--border-light)', borderRadius: 'var(--radius-sm)', borderLeft: '2px solid var(--border)', marginBottom: 8 }}>{b.original}</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '8px 12px', background: 'var(--border-light)', borderRadius: 'var(--radius-sm)', borderLeft: '2px solid var(--border)', marginBottom: 8 }}>{b.original || b}</div>
           <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--accent)', marginBottom: 4 }}>AFTER</div>
-          <div style={{ fontSize: 13, padding: '8px 12px', background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)', borderLeft: '2px solid var(--accent)', marginBottom: 6 }}>{b.rewritten}</div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>💡 {b.improvement}</div>
+          <div style={{ fontSize: 13, padding: '8px 12px', background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)', borderLeft: '2px solid var(--accent)', marginBottom: 6 }}>{b.rewritten || b}</div>
+          {b.improvement && <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>💡 {b.improvement}</div>}
+          <button className="btn btn-ghost btn-sm" style={{ marginTop: 6 }} onClick={() => navigator.clipboard.writeText(b.rewritten || b)}>Copy</button>
         </div>
       ))}
-      {bullets.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>Upload your CV to see rewritten bullets.</div>
-      )}
     </div>
   )
 }
@@ -756,11 +844,10 @@ export default function App() {
   const [applications, setApplications] = useState([])
   const sessionId = profile?.session_id || localStorage.getItem('session_id')
 
-  // Try to restore session
   useEffect(() => {
     const saved = localStorage.getItem('session_id')
     if (saved && !profile) {
-      api.getProfile(saved).then(p => setProfile(p)).catch(() => {})
+      api.getProfile(saved).then(p => setProfile(p)).catch(() => localStorage.removeItem('session_id'))
     }
   }, [])
 
@@ -771,10 +858,7 @@ export default function App() {
 
   useEffect(() => { loadApplications() }, [loadApplications])
 
-  const handleUploaded = (result) => {
-    setProfile(result)
-    setTab('dashboard')
-  }
+  const handleUploaded = (result) => { setProfile(result); setTab('dashboard') }
 
   const handleCreateApp = async (company, role, applyUrl, jdText) => {
     if (!sessionId) throw new Error('Upload your CV first')
@@ -786,30 +870,30 @@ export default function App() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
-      {/* Sidebar */}
       <div style={{ width: 200, background: 'var(--surface)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', padding: '1rem 0', flexShrink: 0 }}>
         <div style={{ padding: '0 1rem 1rem', borderBottom: '1px solid var(--border-light)', marginBottom: '0.75rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 30, height: 30, background: 'var(--accent)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Bot size={16} color="white" />
-            </div>
+            <div style={{ width: 30, height: 30, background: 'var(--accent)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Bot size={16} color="white" /></div>
             <div>
               <div style={{ fontWeight: 600, fontSize: 13 }}>Career Copilot</div>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>ML/AI Hunt</div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Powered by Groq</div>
             </div>
           </div>
           {profile?.name && (
             <div style={{ marginTop: 10, padding: '8px 10px', background: 'var(--border-light)', borderRadius: 'var(--radius-sm)' }}>
               <div style={{ fontWeight: 500, fontSize: 12 }}>{profile.name}</div>
               <div style={{ fontSize: 11, color: 'var(--accent)' }}>ATS: {profile.ats_score}/100</div>
+              <button className="btn btn-ghost btn-sm" style={{ marginTop: 6, width: '100%', fontSize: 10, padding: '2px 6px' }}
+                onClick={() => { navigator.clipboard.writeText(sessionId); alert('Session ID copied!') }}>
+                Copy session ID
+              </button>
             </div>
           )}
         </div>
 
         {TABS.map(({ id, label, Icon }) => (
           <button key={id} onClick={() => setTab(id)}
-            style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 1rem', fontSize: 13, fontWeight: tab === id ? 500 : 400, color: tab === id ? 'var(--accent)' : 'var(--text-secondary)', background: tab === id ? 'var(--accent-light)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', borderLeft: tab === id ? '3px solid var(--accent)' : '3px solid transparent', transition: 'all 0.12s' }}
-          >
+            style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 1rem', fontSize: 13, fontWeight: tab === id ? 500 : 400, color: tab === id ? 'var(--accent)' : 'var(--text-secondary)', background: tab === id ? 'var(--accent-light)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', borderLeft: tab === id ? '3px solid var(--accent)' : '3px solid transparent', transition: 'all 0.12s' }}>
             <Icon size={15} />
             {label}
             {id === 'tracker' && applications.length > 0 && (
@@ -826,7 +910,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main content */}
       <div style={{ flex: 1, overflow: 'auto', padding: '1.25rem' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           {tab === 'dashboard' && <Dashboard profile={profile} applications={applications} />}
