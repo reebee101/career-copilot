@@ -54,17 +54,21 @@ export async function submitPracticeFeedback(sessionId, question, userAnswer, ro
   return r.json()
 }
 
-export async function fetchJobs(remoteOnly = false, country = null, limit = 50) {
+export async function fetchJobs(remoteOnly = false, country = null, limit = 100) {
   let url = `${BASE}/jobs/?limit=${limit}`
   if (remoteOnly) url += '&remote_only=true'
-  if (country) url += `&country=${country}`
+  if (country) url += `&country=${encodeURIComponent(country)}`
   const r = await fetch(url)
   if (!r.ok) throw new Error('Failed to fetch jobs')
   return r.json()
 }
 
-export async function refreshJobs() {
-  const r = await fetch(`${BASE}/jobs/refresh`)
+export async function refreshJobs(cvSkills = []) {
+  let url = `${BASE}/jobs/refresh`
+  if (cvSkills && cvSkills.length > 0) {
+    url += `?cv_skills=${encodeURIComponent(cvSkills.join(','))}`
+  }
+  const r = await fetch(url)
   return r.json()
 }
 
@@ -74,7 +78,7 @@ export async function listApplications(sessionId) {
   return r.json()
 }
 
-export async function createApplication(sessionId, company, role, applyUrl, jdText = '') {
+export async function createApplication(sessionId, company, role, applyUrl = '', jdText = '') {
   const r = await fetch(`${BASE}/applications/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -105,5 +109,14 @@ export async function triggerAutoApply(sessionId, applicationId, phone = '', lin
     body: JSON.stringify({ session_id: sessionId, application_id: applicationId, phone, linkedin_url: linkedinUrl })
   })
   if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Auto-apply failed') }
+  return r.json()
+}
+
+export async function refreshJobsSync(cvSkills = []) {
+  let url = `${BASE}/jobs/refresh-sync`
+  if (cvSkills && cvSkills.length > 0) {
+    url += `?cv_skills=${encodeURIComponent(cvSkills.join(','))}`
+  }
+  const r = await fetch(url)
   return r.json()
 }

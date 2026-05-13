@@ -4,7 +4,7 @@ from sqlalchemy import select
 from models.database import AsyncSessionLocal, JobPosting
 from services.job_service import (
     search_jobs_jsearch, search_jobs_remotive, search_jobs_arbeitnow,
-    search_jobs_wuzzuf, search_jobs_adzuna, search_jobs_serpapi, _demo_jobs
+    search_jobs_wuzzuf, search_jobs_adzuna, search_jobs_serpapi
 )
 from config import get_settings
 from datetime import datetime
@@ -46,11 +46,6 @@ async def fetch_and_store_jobs(cv_skills: list[str] = None):
     if settings.serpapi_key:
         for kw in (cv_skills or ["software engineer"])[:2]:
             jobs.extend(await search_jobs_serpapi(f"{kw} Egypt"))
-
-    # FALLBACK: demo jobs if everything failed
-    if not jobs:
-        jobs = _demo_jobs()
-        print("[Scheduler] All sources failed — using demo data")
 
     new_count = 0
     async with AsyncSessionLocal() as db:

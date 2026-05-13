@@ -1,10 +1,8 @@
 from fastapi import APIRouter, Depends, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
-from models.database import get_db, JobPosting
+from sqlalchemy import select, desc, delete
+from models.database import get_db, JobPosting, AsyncSessionLocal
 from services.scheduler import fetch_and_store_jobs
-from services.job_service import _demo_jobs
-from models.database import AsyncSessionLocal
 from datetime import datetime
 
 router = APIRouter()
@@ -18,7 +16,11 @@ async def list_jobs(
     limit: int = Query(100, le=200),
     offset: int = 0,
 ):
-    q = select(JobPosting).order_by(desc(JobPosting.fetched_at)).limit(limit).offset(offset)
+    # Always exclude demo jobs
+    q = (select(JobPosting)
+         .where(JobPosting.source != "demo")
+         .order_by(desc(JobPosting.fetched_at))
+         .limit(limit).offset(offset))
     if remote_only:
         q = q.where(JobPosting.remote == True)
     if country:
@@ -27,44 +29,33 @@ async def list_jobs(
     result = await db.execute(q)
     jobs = result.scalars().all()
 
-    # DB empty — fetch now synchronously so user sees something immediately
+    # DB empty or only demos — fetch real jobs now
     if not jobs:
         await fetch_and_store_jobs()
-        result = await db.execute(q)
-        jobs = result.scalars().all()
-
-    # Still empty — insert demo jobs directly and return them
-    if not jobs:
-        demo = _demo_jobs()
-        async with AsyncSessionLocal() as session:
-            for d in demo:
-                session.add(JobPosting(
-                    external_id=d["external_id"], title=d["title"], company=d["company"],
-                    location=d["location"], description=d["description"], apply_url=d["apply_url"],
-                    source=d["source"], salary_min=d.get("salary_min"), salary_max=d.get("salary_max"),
-                    remote=d.get("remote", False), posted_at=datetime.utcnow(),
-                ))
-            await session.commit()
         result = await db.execute(q)
         jobs = result.scalars().all()
 
     return [_serialize(j) for j in jobs]
 
 
+@router.delete("/clear-demos")
+async def clear_demos():
+    """Remove all demo jobs from the database."""
+    async with AsyncSessionLocal() as db:
+        await db.execute(delete(JobPosting).where(JobPosting.source == "demo"))
+        await db.commit()
+    return {"message": "Demo jobs cleared"}
+
+
 @router.get("/refresh")
-async def refresh_jobs(
-    background_tasks: BackgroundTasks,
-    cv_skills: str = Query(None),
-):
-    """Trigger background job refresh."""
+async def refresh_jobs(background_tasks: BackgroundTasks, cv_skills: str = Query(None)):
     skills = [s.strip() for s in cv_skills.split(",")] if cv_skills else None
     background_tasks.add_task(fetch_and_store_jobs, skills)
-    return {"message": "Job refresh started in background — check back in ~15 seconds"}
+    return {"message": "Job refresh started"}
 
 
 @router.get("/refresh-sync")
 async def refresh_jobs_sync(cv_skills: str = Query(None)):
-    """Trigger job refresh and wait for results — used by the UI refresh button."""
     skills = [s.strip() for s in cv_skills.split(",")] if cv_skills else None
     count = await fetch_and_store_jobs(skills)
     return {"message": f"Fetched {count} new jobs", "count": count}
@@ -97,5 +88,5 @@ def _serialize(j: JobPosting) -> dict:
         "salary_max": j.salary_max,
         "remote": j.remote,
         "posted_at": j.posted_at.isoformat() if j.posted_at else None,
-        "country": "eg" if (is_egypt or j.source in ("wuzzuf", "demo")) else "",
+        "country": "eg" if (is_egypt or j.source == "wuzzuf") else "remote" if j.remote else "",
     }

@@ -560,8 +560,13 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
 
   const refresh=async()=>{
     setRefreshing(true)
-    await api.refreshJobs()
-    await new Promise(r=>setTimeout(r,3000))
+    try {
+      // Clear cached demo jobs first
+      await fetch('/api/jobs/clear-demos', { method: 'DELETE' })
+      // Trigger real fetch and wait for it
+      const skills=profile?.analysis?.skills||[]
+      await api.refreshJobsSync(skills)
+    } catch(e){ console.error(e) }
     await load()
     setRefreshing(false)
   }
@@ -580,7 +585,7 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
             </button>
           ))}
           <div style={{ marginLeft:'auto',fontSize:12,color:'var(--text-secondary)' }}>
-            {!loading&&<span>{jobs.length} jobs ≥70% match · ranked by fit</span>}
+            {!loading&&<span>{jobs.length} jobs · ranked by fit</span>}
           </div>
           <button className="btn btn-ghost btn-sm" onClick={refresh} disabled={refreshing}>
             <RefreshCw size={13} style={{ animation:refreshing?'spin 1s linear infinite':'none' }} />
@@ -590,7 +595,13 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
         {loading
           ? <div style={{ textAlign:'center',padding:'3rem',color:'var(--text-secondary)' }}><Spinner/></div>
           : jobs.length===0
-            ? <div style={{ textAlign:'center',padding:'3rem',color:'var(--text-secondary)' }}>No jobs above 70% match. Try refreshing or switching region.</div>
+            ? <div style={{ textAlign:'center',padding:'3rem' }}>
+                <div style={{ color:'var(--text-secondary)',marginBottom:12 }}>No jobs found yet.</div>
+                <button className="btn btn-primary" onClick={refresh} disabled={refreshing}>
+                  {refreshing?<><Spinner/> Fetching real jobs…</>:<><RefreshCw size={13}/> Fetch jobs now</>}
+                </button>
+                {settings?.jsearch_api_key===''&&<div style={{ fontSize:12,color:'var(--text-secondary)',marginTop:10 }}>Add a <strong>JSEARCH_API_KEY</strong> in Render env vars to get real jobs from Indeed, LinkedIn &amp; Glassdoor.</div>}
+              </div>
             : jobs.map(job=>(
                 <div key={job.id} className="card" style={{ marginBottom:8,cursor:'pointer',border:selected?.id===job.id?'1px solid var(--accent)':undefined }}
                   onClick={()=>setSelected(selected?.id===job.id?null:job)}>
