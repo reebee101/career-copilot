@@ -19,7 +19,7 @@ HEADERS = {
 
 async def search_jobs_remotive(cv_skills: list[str] = None) -> list[dict]:
     """Remotive.com public API — free, no auth, real jobs, Egypt-friendly remote."""
-    keywords = cv_skills[:3] if cv_skills else ["software", "engineer", "developer"]
+    keywords = cv_skills[:3] if cv_skills else ["manager", "analyst", "specialist"]
     results = []
     seen = set()
 
@@ -101,7 +101,7 @@ async def search_jobs_arbeitnow(cv_skills: list[str] = None) -> list[dict]:
 # ── Wuzzuf scraper (best-effort) ───────────────────────────────
 
 async def search_jobs_wuzzuf(cv_skills: list[str] = None) -> list[dict]:
-    keywords = cv_skills[:3] if cv_skills else ["software engineer", "developer", "analyst"]
+    keywords = cv_skills[:3] if cv_skills else ["manager", "analyst", "specialist"]
     results = []
     seen = set()
 
@@ -313,7 +313,7 @@ async def search_jobs_jsearch(cv_skills: list[str] = None) -> list[dict]:
 
     results = []
     seen = set()
-    keywords = cv_skills[:3] if cv_skills else ["software engineer", "data analyst", "developer"]
+    keywords = cv_skills[:3] if cv_skills else ["manager", "analyst", "coordinator"]
 
     # Search using multiple Egypt identifiers to maximize results
     egypt_terms = ["Egypt", "Cairo", "EG", "Alexandria"]

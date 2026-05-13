@@ -40,35 +40,36 @@ def extract_cv_text(content: bytes, filename: str) -> str:
 
 async def analyze_cv(cv_text: str) -> dict:
     system = """You are a senior career coach and ATS expert. Analyze the CV thoroughly.
+This tool is used by professionals across ALL fields — Engineering, HR, Sales, Marketing, Finance, Operations, Design, Legal, Healthcare, Education, and more.
 Return a JSON object with EXACTLY these keys — no extras, no omissions:
 
 name (string)
 email (string, or empty)
 phone (string, or empty)
-summary (string, 2 sentences based on the actual CV content)
+summary (string, 2 sentences based on the actual CV content and their specific field)
 ats_score (integer 0-100, based on keyword density, formatting clarity, measurable achievements, section structure)
 score_breakdown (object): { "keywords": int, "formatting": int, "experience": int, "education": int, "skills": int } — all 0-100
-skills (array of strings, ALL skills extracted from CV — be thorough, include languages, frameworks, tools, soft skills)
+skills (array of strings, ALL skills extracted from CV — be thorough: include technical skills, tools, soft skills, domain expertise, certifications, languages. Adapt to the candidate's field.)
 experience_years (integer)
 education (string)
-strengths (array of exactly 3 strings, specific to this person's actual CV content — NOT generic)
+strengths (array of exactly 3 strings, specific to this person's actual CV content and field — NOT generic platitudes)
 critical_gaps (array of EXACTLY 4 objects): EVERY object MUST have these exact keys:
-  { "skill": "string — name of the missing skill or gap",
+  { "skill": "string — name of the missing skill or gap relevant to their field",
     "severity": "critical" | "moderate" | "minor",
-    "reason": "string — 1 sentence explaining why this gap hurts job prospects" }
+    "reason": "string — 1 sentence explaining why this gap hurts job prospects in their field" }
   IMPORTANT: critical_gaps MUST always return exactly 4 objects. Even excellent CVs have gaps.
   DO NOT return strings, only objects. DO NOT omit any of the three keys.
 rewritten_bullets (array of 5 objects): each MUST have:
   { "original": "exact bullet text from CV",
-    "rewritten": "improved bullet: strong action verb + specific number/metric + business impact",
+    "rewritten": "improved bullet: strong action verb + specific number/metric + business impact relevant to their field",
     "improvement": "one sentence explaining what changed" }
 recommended_certs (array of 3 objects): each has:
   { "priority": 1|2|3, "name": string, "provider": string,
-    "reason": "tailored to this person's specific skill gaps",
+    "reason": "tailored to this person's specific skill gaps and field",
     "score_impact": string like "+8 ATS points" }
 recommended_projects (array of 3 objects): each has:
   { "title": string, "difficulty": "beginner"|"intermediate"|"advanced",
-    "description": "2 sentences on what to build and why",
+    "description": "2 sentences on what to build/do and why it helps in their field",
     "skills_added": [array of strings] }"""
 
     return _chat_json([

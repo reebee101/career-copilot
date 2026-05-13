@@ -3,7 +3,7 @@ import {
   Upload, LayoutDashboard, Search, FileText, List, Mic, Award,
   Zap, RefreshCw, ChevronRight, X, Check, AlertCircle, Loader,
   ExternalLink, Bot, Briefcase, TrendingUp, Target, Send,
-  PlusCircle, LogIn, LogOut, History, GitCompare, User, Lock
+  PlusCircle, LogIn, LogOut, History, GitCompare, User, Lock, Sparkles
 } from 'lucide-react'
 import * as api from './api'
 
@@ -15,17 +15,17 @@ const STATUS_LABELS = {
 function ScoreRing({ score, size = 90 }) {
   const r = 36, circ = 2 * Math.PI * r
   const offset = circ - (score / 100) * circ
-  const color = score >= 80 ? '#1D9E75' : score >= 60 ? '#EF9F27' : '#D85A30'
+  const color = score >= 80 ? '#5DAF8B' : score >= 60 ? '#D4956A' : '#D4726A'
   return (
     <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
       <svg width={size} height={size} viewBox="0 0 90 90" style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx="45" cy="45" r={r} fill="none" stroke="#E5E7EB" strokeWidth="8" />
+        <circle cx="45" cy="45" r={r} fill="none" stroke="#F0D9E2" strokeWidth="8" />
         <circle cx="45" cy="45" r={r} fill="none" stroke={color} strokeWidth="8"
           strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
       </svg>
       <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center' }}>
-        <span style={{ fontSize: size>70?20:16, fontWeight:600, color:'#111827' }}>{score}</span>
-        <span style={{ fontSize:10, color:'#9CA3AF' }}>/ 100</span>
+        <span style={{ fontSize: size>70?20:16, fontWeight:700, color:'var(--text)' }}>{score}</span>
+        <span style={{ fontSize:10, color:'var(--text-tertiary)' }}>/ 100</span>
       </div>
     </div>
   )
@@ -71,45 +71,51 @@ function AuthScreen({ onAuth }) {
 
   return (
     <div style={{ minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'2rem',background:'var(--bg)' }}>
-      <div style={{ maxWidth:420,width:'100%' }}>
-        <div style={{ display:'flex',alignItems:'center',justifyContent:'center',gap:10,marginBottom:'1.75rem' }}>
-          <div style={{ width:42,height:42,background:'var(--accent)',borderRadius:11,display:'flex',alignItems:'center',justifyContent:'center' }}>
-            <Bot size={22} color="white" />
+      <div style={{ maxWidth:440,width:'100%' }}>
+        {/* Logo */}
+        <div style={{ display:'flex',alignItems:'center',justifyContent:'center',gap:12,marginBottom:'2rem' }}>
+          <div style={{ width:48,height:48,background:'linear-gradient(135deg,#C4547A,#D4729A)',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 14px rgba(196,84,122,0.35)' }}>
+            <Sparkles size={22} color="white" />
           </div>
           <div>
-            <div style={{ fontSize:20,fontWeight:700 }}>Career Copilot Egypt</div>
-            <div style={{ fontSize:12,color:'var(--text-secondary)' }}>AI-powered job search & CV optimizer</div>
+            <div style={{ fontSize:22,fontWeight:700,color:'var(--text)',letterSpacing:'-0.02em' }}>Career Copilot</div>
+            <div style={{ fontSize:12,color:'var(--text-secondary)',marginTop:1 }}>AI job search for every field</div>
           </div>
         </div>
-        <div className="card" style={{ padding:'1.75rem' }}>
-          <div style={{ display:'flex',gap:0,marginBottom:'1.25rem',borderBottom:'1px solid var(--border-light)' }}>
+
+        <div className="card" style={{ padding:'2rem',borderColor:'var(--border)',background:'white' }}>
+          <div style={{ display:'flex',gap:0,marginBottom:'1.5rem',background:'var(--border-light)',borderRadius:30,padding:3 }}>
             {[['signup','Create account'],['login','Log in']].map(([m,label]) => (
               <button key={m} onClick={() => { setMode(m); setError('') }}
-                style={{ flex:1,padding:'8px 0',fontSize:13,fontWeight:mode===m?600:400,color:mode===m?'var(--accent)':'var(--text-secondary)',background:'transparent',border:'none',borderBottom:mode===m?'2px solid var(--accent)':'2px solid transparent',cursor:'pointer',marginBottom:-1 }}>
+                style={{ flex:1,padding:'7px 0',fontSize:13,fontWeight:mode===m?600:400,color:mode===m?'white':'var(--text-secondary)',background:mode===m?'linear-gradient(135deg,#C4547A,#D4729A)':'transparent',border:'none',borderRadius:27,cursor:'pointer',boxShadow:mode===m?'0 2px 8px rgba(196,84,122,0.3)':'none',transition:'all 0.2s' }}>
                 {label}
               </button>
             ))}
           </div>
+
           <div style={{ display:'flex',flexDirection:'column',gap:10 }}>
             <div style={{ position:'relative' }}>
-              <User size={14} style={{ position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-secondary)' }} />
-              <input placeholder="Email address" type="email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} style={{ paddingLeft:32 }} />
+              <User size={14} style={{ position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:'var(--text-tertiary)' }} />
+              <input placeholder="Email address" type="email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} style={{ paddingLeft:36 }} />
             </div>
             <div style={{ position:'relative' }}>
-              <Lock size={14} style={{ position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-secondary)' }} />
-              <input placeholder="Password (min 6 chars)" type="password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} style={{ paddingLeft:32 }} />
+              <Lock size={14} style={{ position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:'var(--text-tertiary)' }} />
+              <input placeholder="Password (min 6 chars)" type="password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} style={{ paddingLeft:36 }} />
             </div>
           </div>
+
           {error && (
-            <div style={{ display:'flex',gap:7,alignItems:'center',padding:'9px 12px',background:'var(--coral-light)',borderRadius:'var(--radius-sm)',color:'var(--coral)',fontSize:12,marginTop:10 }}>
+            <div style={{ display:'flex',gap:7,alignItems:'center',padding:'9px 12px',background:'var(--coral-light)',borderRadius:'var(--radius-sm)',color:'var(--coral)',fontSize:12,marginTop:10,border:'1px solid #F5D0CD' }}>
               <AlertCircle size={13} /> {error}
             </div>
           )}
+
           <button className="btn btn-primary" style={{ width:'100%',marginTop:14,justifyContent:'center',gap:8 }} onClick={submit} disabled={loading}>
             {loading ? <><Spinner /> Processing…</> : mode==='signup' ? <><User size={14}/> Create account</> : <><LogIn size={14}/> Log in</>}
           </button>
-          <div style={{ marginTop:'1rem',padding:'11px 13px',background:'var(--accent2-light)',borderRadius:'var(--radius-sm)',fontSize:12,color:'#3C3489' }}>
-            <strong>What you get:</strong> CV parsed, ATS-scored, matched to live Egypt jobs (Wuzzuf + LinkedIn), and rewritten for every role you target.
+
+          <div style={{ marginTop:'1rem',padding:'12px 14px',background:'var(--accent2-light)',borderRadius:'var(--radius-sm)',fontSize:12,color:'var(--accent2-dark)',border:'1px solid var(--border-blue)' }}>
+            <strong>Works for any field:</strong> Engineering, HR, Sales, Marketing, Finance, Design, Operations — upload any CV and get matched jobs + ATS coaching.
           </div>
         </div>
       </div>
@@ -137,48 +143,54 @@ function UploadScreen({ onUploaded, isReupload=false, prevProfile=null, onBack }
 
   return (
     <div style={{ minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'2rem',background:'var(--bg)' }}>
-      <div style={{ maxWidth:480,width:'100%',textAlign:'center' }}>
+      <div style={{ maxWidth:500,width:'100%',textAlign:'center' }}>
         {isReupload && onBack && (
-          <button className="btn btn-ghost btn-sm" style={{ marginBottom:12 }} onClick={onBack}>← Back</button>
+          <button className="btn btn-ghost btn-sm" style={{ marginBottom:14 }} onClick={onBack}>← Back</button>
         )}
-        <div style={{ display:'flex',alignItems:'center',justifyContent:'center',gap:10,marginBottom:'1.5rem' }}>
-          <div style={{ width:40,height:40,background:'var(--accent)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center' }}>
-            <Bot size={22} color="white" />
+        <div style={{ display:'flex',alignItems:'center',justifyContent:'center',gap:12,marginBottom:'1.75rem' }}>
+          <div style={{ width:44,height:44,background:'linear-gradient(135deg,#C4547A,#D4729A)',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 14px rgba(196,84,122,0.3)' }}>
+            <Sparkles size={22} color="white" />
           </div>
           <div style={{ textAlign:'left' }}>
-            <div style={{ fontSize:20,fontWeight:600 }}>{isReupload?'Upload New CV Version':'Upload Your CV'}</div>
-            <div style={{ fontSize:13,color:'var(--text-secondary)' }}>{isReupload?`Previous ATS score: ${prevProfile?.ats_score||0}/100`:'Powered by Groq'}</div>
+            <div style={{ fontSize:20,fontWeight:700,letterSpacing:'-0.01em' }}>{isReupload?'Upload New CV Version':'Upload Your CV'}</div>
+            <div style={{ fontSize:13,color:'var(--text-secondary)',marginTop:1 }}>{isReupload?`Previous ATS score: ${prevProfile?.ats_score||0}/100`:'Works for any profession'}</div>
           </div>
         </div>
+
         <div className="card" style={{ padding:'2rem' }}>
           <div
             onDragOver={e=>{e.preventDefault();setDragging(true)}}
             onDragLeave={()=>setDragging(false)}
             onDrop={e=>{e.preventDefault();setDragging(false);handleFile(e.dataTransfer.files[0])}}
             onClick={()=>document.getElementById('cv-input').click()}
-            style={{ border:`2px dashed ${dragging?'var(--accent)':'var(--border)'}`,borderRadius:'var(--radius)',padding:'2.5rem 1.5rem',cursor:'pointer',background:dragging?'var(--accent-light)':'var(--border-light)',transition:'all 0.15s' }}>
+            style={{ border:`2px dashed ${dragging?'var(--accent)':'var(--border)'}`,borderRadius:12,padding:'2.5rem 1.5rem',cursor:'pointer',background:dragging?'var(--accent-light)':'var(--surface-pink)',transition:'all 0.15s' }}>
             {loading ? (
-              <div style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:10 }}>
-                <Loader size={32} color="var(--accent)" style={{ animation:'spin 1s linear infinite' }} />
-                <div style={{ fontWeight:500 }}>Analyzing your CV…</div>
+              <div style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:12 }}>
+                <div style={{ width:50,height:50,background:'var(--accent-light)',borderRadius:50,display:'flex',alignItems:'center',justifyContent:'center' }}>
+                  <Loader size={24} color="var(--accent)" style={{ animation:'spin 1s linear infinite' }} />
+                </div>
+                <div style={{ fontWeight:600,color:'var(--text)' }}>Analyzing your CV…</div>
                 <div style={{ color:'var(--text-secondary)',fontSize:13 }}>Scoring ATS, extracting skills, rewriting bullets…</div>
               </div>
             ) : (
               <>
-                <Upload size={32} color="var(--accent)" style={{ marginBottom:10 }} />
-                <div style={{ fontWeight:500,marginBottom:4 }}>Drop your CV here</div>
+                <div style={{ width:56,height:56,background:'var(--accent-light)',borderRadius:50,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px' }}>
+                  <Upload size={24} color="var(--accent)" />
+                </div>
+                <div style={{ fontWeight:600,marginBottom:4,color:'var(--text)' }}>Drop your CV here</div>
                 <div style={{ color:'var(--text-secondary)',fontSize:13 }}>PDF, DOCX, or TXT · Max 5MB</div>
+                <div style={{ marginTop:12,fontSize:12,color:'var(--text-tertiary)' }}>Engineering · HR · Sales · Marketing · Finance · Design · and more</div>
               </>
             )}
           </div>
           <input id="cv-input" type="file" accept=".pdf,.docx,.doc,.txt" style={{ display:'none' }} onChange={e=>handleFile(e.target.files[0])} />
           {error && (
-            <div style={{ display:'flex',gap:8,alignItems:'center',padding:'10px 12px',background:'var(--coral-light)',borderRadius:'var(--radius-sm)',color:'var(--coral)',fontSize:13,marginTop:10 }}>
+            <div style={{ display:'flex',gap:8,alignItems:'center',padding:'10px 12px',background:'var(--coral-light)',borderRadius:'var(--radius-sm)',color:'var(--coral)',fontSize:13,marginTop:10,border:'1px solid #F5D0CD' }}>
               <AlertCircle size={14} /> {error}
             </div>
           )}
-          <div style={{ marginTop:'1.25rem',padding:'12px 14px',background:'var(--accent2-light)',borderRadius:'var(--radius-sm)',fontSize:12,color:'#3C3489',textAlign:'left' }}>
-            <strong>What happens:</strong> CV parsed → ATS scored → critical gaps found → bullets rewritten → matched against live Egypt jobs from Wuzzuf & LinkedIn.
+          <div style={{ marginTop:'1.25rem',padding:'12px 14px',background:'var(--accent2-light)',borderRadius:'var(--radius-sm)',fontSize:12,color:'var(--accent2-dark)',textAlign:'left',border:'1px solid var(--border-blue)' }}>
+            <strong>What happens:</strong> CV parsed → ATS scored → critical gaps found → bullets rewritten → matched against live jobs by field.
           </div>
         </div>
       </div>
@@ -208,55 +220,38 @@ function CVCompareModal({ oldProfile, newProfile, cvHistory, onClose }) {
     toImprove.push(`Address ${newGaps.filter(g=>g.severity==='critical').length} critical skill gap(s) to boost score further`)
   if (newScore<80) toImprove.push('Add quantified metrics to at least 2 more experience bullets')
   toImprove.push('Tailor your CV summary to match your target job title exactly')
-  if (!(newAnalysis.summary||'').includes('%') && !(newAnalysis.summary||'').includes('million'))
-    toImprove.push('Include measurable impact numbers (%, users, revenue) in your summary')
 
   return (
-    <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999,padding:'1rem' }}>
+    <div style={{ position:'fixed',inset:0,background:'rgba(45,26,36,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999,padding:'1rem' }}>
       <div className="card" style={{ maxWidth:560,width:'100%',padding:'1.5rem',maxHeight:'90vh',overflowY:'auto' }}>
         <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.25rem' }}>
           <div style={{ display:'flex',alignItems:'center',gap:8 }}>
             <GitCompare size={18} color="var(--accent)" />
-            <div style={{ fontWeight:600,fontSize:15 }}>CV Version Comparison</div>
+            <div style={{ fontWeight:700,fontSize:15 }}>CV Version Comparison</div>
           </div>
           <button className="btn btn-ghost btn-sm" onClick={onClose}><X size={14}/></button>
         </div>
-        <div style={{ display:'flex',alignItems:'center',justifyContent:'center',gap:24,marginBottom:'1.25rem',padding:'1rem',background:'var(--border-light)',borderRadius:'var(--radius)' }}>
+        <div style={{ display:'flex',alignItems:'center',justifyContent:'center',gap:24,marginBottom:'1.25rem',padding:'1rem',background:'var(--surface-pink)',borderRadius:'var(--radius)',border:'1px solid var(--border)' }}>
           <div style={{ textAlign:'center' }}>
             <div style={{ fontSize:12,color:'var(--text-secondary)',marginBottom:6 }}>Previous (v{cvHistory.length-1})</div>
             <ScoreRing score={oldScore} size={80} />
           </div>
-          <ChevronRight size={20} color="var(--text-secondary)" />
+          <ChevronRight size={20} color="var(--text-tertiary)" />
           <div style={{ textAlign:'center' }}>
             <div style={{ fontSize:12,color:'var(--text-secondary)',marginBottom:6 }}>New (v{cvHistory.length})</div>
             <ScoreRing score={newScore} size={80} />
           </div>
-          <div style={{ textAlign:'center',padding:'12px 16px',background:delta>=0?'var(--accent-light)':'var(--coral-light)',borderRadius:'var(--radius)' }}>
-            <div style={{ fontSize:11,color:delta>=0?'var(--accent)':'var(--coral)' }}>Score change</div>
-            <div style={{ fontSize:24,fontWeight:700,color:delta>=0?'var(--accent)':'var(--coral)' }}>{delta>=0?'+':''}{delta}</div>
-          </div>
-        </div>
-        <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:'1rem' }}>
-          <div className="card" style={{ background:'var(--border-light)' }}>
-            <div style={{ fontSize:11,fontWeight:600,color:'var(--text-secondary)',marginBottom:8 }}>PREVIOUS SKILLS</div>
-            <div style={{ display:'flex',flexWrap:'wrap',gap:4 }}>{(oldAnalysis.skills||[]).map((s,i)=><span key={i} className="badge badge-gray">{s}</span>)}</div>
-          </div>
-          <div className="card" style={{ background:'var(--accent-light)' }}>
-            <div style={{ fontSize:11,fontWeight:600,color:'var(--accent)',marginBottom:8 }}>NEW SKILLS</div>
-            <div style={{ display:'flex',flexWrap:'wrap',gap:4 }}>
-              {(newAnalysis.skills||[]).map((s,i)=>{
-                const isNew=!(oldAnalysis.skills||[]).includes(s)
-                return <span key={i} className={`badge ${isNew?'badge-green':'badge-gray'}`}>{s}{isNew?' ✦':''}</span>
-              })}
-            </div>
+          <div style={{ textAlign:'center',padding:'12px 16px',background:delta>=0?'var(--success-light)':'var(--coral-light)',borderRadius:'var(--radius)' }}>
+            <div style={{ fontSize:11,color:delta>=0?'var(--success)':'var(--coral)' }}>Score change</div>
+            <div style={{ fontSize:24,fontWeight:700,color:delta>=0?'var(--success)':'var(--coral)' }}>{delta>=0?'+':''}{delta}</div>
           </div>
         </div>
         {improvements.length>0 && (
-          <div className="card" style={{ background:'var(--accent-light)',marginBottom:10 }}>
-            <div style={{ fontSize:12,fontWeight:600,color:'var(--accent)',marginBottom:8 }}>✓ What improved</div>
+          <div className="card" style={{ background:'var(--success-light)',marginBottom:10,border:'1px solid #C5E8D6' }}>
+            <div style={{ fontSize:12,fontWeight:600,color:'var(--success)',marginBottom:8 }}>✓ What improved</div>
             {improvements.map((item,i)=>(
               <div key={i} style={{ display:'flex',gap:8,fontSize:13,marginBottom:5 }}>
-                <Check size={13} color="var(--accent)" style={{ flexShrink:0,marginTop:2 }} />{item}
+                <Check size={13} color="var(--success)" style={{ flexShrink:0,marginTop:2 }} />{item}
               </div>
             ))}
           </div>
@@ -269,18 +264,6 @@ function CVCompareModal({ oldProfile, newProfile, cvHistory, onClose }) {
             </div>
           ))}
         </div>
-        {cvHistory.length>1 && (
-          <div className="card" style={{ marginBottom:'1.25rem' }}>
-            <div style={{ fontSize:12,fontWeight:600,color:'var(--text-secondary)',marginBottom:8 }}>VERSION HISTORY</div>
-            {cvHistory.map((h,i)=>(
-              <div key={i} style={{ display:'flex',alignItems:'center',gap:10,padding:'6px 0',borderBottom:i<cvHistory.length-1?'1px solid var(--border-light)':'none',fontSize:13 }}>
-                <span style={{ fontSize:11,background:'var(--border-light)',padding:'2px 7px',borderRadius:20,fontWeight:500 }}>v{h.version}</span>
-                <span style={{ color:'var(--text-secondary)',flex:1 }}>{h.uploaded_at}</span>
-                <span style={{ fontWeight:600,color:h.ats_score>=70?'var(--accent)':'var(--amber)' }}>{h.ats_score}/100</span>
-              </div>
-            ))}
-          </div>
-        )}
         <button className="btn btn-primary" style={{ width:'100%',justifyContent:'center' }} onClick={onClose}>
           <Check size={14}/> Got it — view dashboard
         </button>
@@ -293,22 +276,23 @@ function CVCompareModal({ oldProfile, newProfile, cvHistory, onClose }) {
 function Dashboard({ profile, applications }) {
   const analysis = profile?.analysis||{}
   const breakdown = analysis.score_breakdown||{}
-  // FIXED: handle both object {skill,severity,reason} and legacy string forms
   const gaps = (analysis.critical_gaps||[]).map(g =>
     typeof g === 'object' ? g : { skill: String(g), severity:'moderate', reason:'' }
   )
 
+  const statCards = [
+    { label:'ATS Score', val:profile?.ats_score||0, color:'var(--accent)', bg:'var(--accent-light)' },
+    { label:'Applications', val:applications.length, color:'var(--accent2)', bg:'var(--accent2-light)' },
+    { label:'Interviews', val:applications.filter(a=>a.status==='interview').length, color:'var(--amber)', bg:'var(--amber-light)' },
+    { label:'Offers', val:applications.filter(a=>a.status==='offer').length, color:'var(--success)', bg:'var(--success-light)' },
+  ]
+
   return (
     <div>
       <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:'1rem' }}>
-        {[
-          { label:'ATS Score', val:profile?.ats_score||0, color:'var(--accent)' },
-          { label:'Applications', val:applications.length, color:'var(--accent2)' },
-          { label:'Interviews', val:applications.filter(a=>a.status==='interview').length, color:'var(--amber)' },
-          { label:'Offers', val:applications.filter(a=>a.status==='offer').length, color:'#1D9E75' },
-        ].map(m=>(
-          <div key={m.label} className="card" style={{ textAlign:'center',padding:'1rem' }}>
-            <div style={{ fontSize:28,fontWeight:600,color:m.color }}>{m.val}</div>
+        {statCards.map(m=>(
+          <div key={m.label} className="card" style={{ textAlign:'center',padding:'1.25rem 1rem',background:m.bg,border:`1px solid ${m.color}22` }}>
+            <div style={{ fontSize:30,fontWeight:700,color:m.color }}>{m.val}</div>
             <div style={{ fontSize:12,color:'var(--text-secondary)',marginTop:2 }}>{m.label}</div>
           </div>
         ))}
@@ -322,32 +306,35 @@ function Dashboard({ profile, applications }) {
           </div>
         </div>
         <div className="card">
-          <div style={{ fontSize:12,fontWeight:500,color:'var(--text-secondary)',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:10 }}>Score breakdown</div>
+          <div style={{ fontSize:12,fontWeight:600,color:'var(--text-tertiary)',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:10 }}>Score breakdown</div>
           {Object.entries(breakdown).map(([k,v])=>(
             <div key={k} style={{ display:'flex',alignItems:'center',gap:8,marginBottom:7 }}>
               <div style={{ fontSize:12,width:130,color:'var(--text-secondary)',flexShrink:0,textTransform:'capitalize' }}>{k.replace(/_/g,' ')}</div>
-              <div style={{ flex:1,height:5,background:'var(--border-light)',borderRadius:3,overflow:'hidden' }}>
-                <div style={{ width:`${v}%`,height:'100%',background:v>=70?'var(--accent)':v>=50?'var(--amber)':'var(--coral)',borderRadius:3 }} />
+              <div style={{ flex:1,height:6,background:'var(--border-light)',borderRadius:3,overflow:'hidden' }}>
+                <div style={{ width:`${v}%`,height:'100%',background:v>=70?'var(--accent)':v>=50?'var(--amber)':'var(--coral)',borderRadius:3,transition:'width 0.6s ease' }} />
               </div>
-              <div style={{ fontSize:12,fontWeight:500,width:28,textAlign:'right' }}>{v}</div>
+              <div style={{ fontSize:12,fontWeight:600,width:28,textAlign:'right',color:'var(--text)' }}>{v}</div>
             </div>
           ))}
         </div>
       </div>
       <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10 }}>
         <div className="card">
-          <div style={{ fontSize:12,fontWeight:500,color:'var(--text-secondary)',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:10 }}>Strengths</div>
+          <div style={{ fontSize:12,fontWeight:600,color:'var(--text-tertiary)',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:10 }}>Strengths</div>
           {(analysis.strengths||[]).length===0
             ? <div style={{ fontSize:13,color:'var(--text-secondary)' }}>Upload your CV to see strengths.</div>
             : (analysis.strengths||[]).map((s,i)=>(
                 <div key={i} style={{ display:'flex',gap:8,alignItems:'flex-start',marginBottom:7,fontSize:13 }}>
-                  <Check size={14} color="var(--accent)" style={{ flexShrink:0,marginTop:1 }} /><span>{s}</span>
+                  <div style={{ width:18,height:18,background:'var(--success-light)',borderRadius:50,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:1 }}>
+                    <Check size={11} color="var(--success)" />
+                  </div>
+                  <span>{s}</span>
                 </div>
               ))
           }
         </div>
         <div className="card">
-          <div style={{ fontSize:12,fontWeight:500,color:'var(--text-secondary)',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:10 }}>Critical gaps</div>
+          <div style={{ fontSize:12,fontWeight:600,color:'var(--text-tertiary)',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:10 }}>Critical gaps</div>
           {gaps.length===0
             ? <div style={{ fontSize:13,color:'var(--text-secondary)' }}>No gaps found — re-upload CV to refresh.</div>
             : gaps.map((g,i)=>{
@@ -403,13 +390,14 @@ function JDAnalyzer({ sessionId, onCreateApp }) {
   }
 
   const tabs=[{id:'match',label:'Match Analysis'},{id:'rewrite',label:'Rewritten CV'},{id:'cover',label:'Cover Letter'}]
+  const matchColor=s=>s>=80?'var(--success)':s>=65?'var(--amber)':'var(--coral)'
 
   return (
     <div>
       <div className="card" style={{ marginBottom:10 }}>
         <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10 }}>
           <input placeholder="Company name" value={company} onChange={e=>setCompany(e.target.value)} />
-          <input placeholder="Role title" value={role} onChange={e=>setRole(e.target.value)} />
+          <input placeholder="Role title (any field)" value={role} onChange={e=>setRole(e.target.value)} />
         </div>
         <textarea placeholder="Paste the full job description here…" value={jd} onChange={e=>setJd(e.target.value)} style={{ minHeight:140,marginBottom:10 }} />
         <button className="btn btn-primary" onClick={analyze} disabled={!jd.trim()||loading}>
@@ -419,12 +407,12 @@ function JDAnalyzer({ sessionId, onCreateApp }) {
       {result&&(
         <div>
           <div style={{ display:'grid',gridTemplateColumns:'120px 1fr',gap:10,marginBottom:10 }}>
-            <div className="card" style={{ textAlign:'center',padding:'1.25rem 1rem' }}>
+            <div className="card" style={{ textAlign:'center',padding:'1.25rem 1rem',background:'var(--surface-pink)' }}>
               <ScoreRing score={result.match_score} size={80} />
-              <div style={{ fontWeight:600,marginTop:8,fontSize:13 }}>{result.verdict}</div>
+              <div style={{ fontWeight:600,marginTop:8,fontSize:13,color:matchColor(result.match_score) }}>{result.verdict}</div>
             </div>
             <div className="card">
-              <div style={{ fontWeight:500,marginBottom:8 }}>Application strategy</div>
+              <div style={{ fontWeight:600,marginBottom:8 }}>Application strategy</div>
               <div style={{ fontSize:13,color:'var(--text-secondary)',marginBottom:10,lineHeight:1.6 }}>{result.application_strategy}</div>
               <div style={{ display:'flex',gap:6,flexWrap:'wrap' }}>
                 <button className="btn btn-primary btn-sm" onClick={genCL} disabled={loadingCL}>
@@ -436,10 +424,10 @@ function JDAnalyzer({ sessionId, onCreateApp }) {
               </div>
             </div>
           </div>
-          <div style={{ display:'flex',gap:4,marginBottom:10,borderBottom:'1px solid var(--border-light)',paddingBottom:0 }}>
+          <div style={{ display:'flex',gap:6,marginBottom:10 }}>
             {tabs.map(t=>(
               <button key={t.id} onClick={()=>setActiveTab(t.id)}
-                style={{ padding:'7px 14px',fontSize:13,fontWeight:activeTab===t.id?600:400,color:activeTab===t.id?'var(--accent)':'var(--text-secondary)',background:'transparent',border:'none',borderBottom:activeTab===t.id?'2px solid var(--accent)':'2px solid transparent',cursor:'pointer',marginBottom:-1 }}>
+                style={{ padding:'6px 16px',borderRadius:30,border:activeTab===t.id?'1.5px solid var(--accent)':'1.5px solid var(--border)',background:activeTab===t.id?'var(--accent-light)':'transparent',color:activeTab===t.id?'var(--accent)':'var(--text-secondary)',fontSize:12,fontWeight:activeTab===t.id?600:400,cursor:'pointer',transition:'all 0.15s' }}>
                 {t.label}
               </button>
             ))}
@@ -448,16 +436,16 @@ function JDAnalyzer({ sessionId, onCreateApp }) {
             <div>
               <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10 }}>
                 <div className="card">
-                  <div style={{ fontSize:12,fontWeight:500,color:'var(--text-secondary)',textTransform:'uppercase',marginBottom:8 }}>Matched keywords</div>
+                  <div style={{ fontSize:12,fontWeight:600,color:'var(--text-tertiary)',textTransform:'uppercase',marginBottom:8 }}>Matched keywords</div>
                   <div style={{ display:'flex',flexWrap:'wrap',gap:5 }}>{(result.matched_keywords||[]).map((k,i)=><span key={i} className="badge badge-green">{k}</span>)}</div>
                 </div>
                 <div className="card">
-                  <div style={{ fontSize:12,fontWeight:500,color:'var(--text-secondary)',textTransform:'uppercase',marginBottom:8 }}>Missing keywords</div>
+                  <div style={{ fontSize:12,fontWeight:600,color:'var(--text-tertiary)',textTransform:'uppercase',marginBottom:8 }}>Missing keywords</div>
                   <div style={{ display:'flex',flexWrap:'wrap',gap:5 }}>{(result.missing_keywords||[]).map((k,i)=><span key={i} className="badge badge-coral">{k}</span>)}</div>
                 </div>
               </div>
               <div className="card">
-                <div style={{ fontSize:12,fontWeight:500,color:'var(--text-secondary)',textTransform:'uppercase',marginBottom:8 }}>Tailored bullets to add</div>
+                <div style={{ fontSize:12,fontWeight:600,color:'var(--text-tertiary)',textTransform:'uppercase',marginBottom:8 }}>Tailored bullets to add</div>
                 {(result.tailored_bullets||[]).map((b,i)=>(
                   <div key={i} style={{ fontSize:13,padding:'8px 12px',background:'var(--accent-light)',borderRadius:'var(--radius-sm)',borderLeft:'2px solid var(--accent)',marginBottom:6 }}>• {b}</div>
                 ))}
@@ -467,7 +455,7 @@ function JDAnalyzer({ sessionId, onCreateApp }) {
           {activeTab==='rewrite'&&result.rewritten_cv_sections&&(
             <div>
               <div className="card" style={{ marginBottom:10 }}>
-                <div style={{ fontSize:12,fontWeight:500,color:'var(--text-secondary)',textTransform:'uppercase',marginBottom:8 }}>Rewritten summary for this role</div>
+                <div style={{ fontSize:12,fontWeight:600,color:'var(--text-tertiary)',textTransform:'uppercase',marginBottom:8 }}>Rewritten summary for this role</div>
                 <div style={{ fontSize:13,lineHeight:1.7,padding:'10px 12px',background:'var(--accent-light)',borderRadius:'var(--radius-sm)',borderLeft:'2px solid var(--accent)' }}>
                   {result.rewritten_cv_sections.summary}
                 </div>
@@ -475,11 +463,11 @@ function JDAnalyzer({ sessionId, onCreateApp }) {
               </div>
               <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10 }}>
                 <div className="card">
-                  <div style={{ fontSize:12,fontWeight:500,color:'var(--text-secondary)',textTransform:'uppercase',marginBottom:8 }}>Highlight these skills</div>
-                  <div style={{ display:'flex',flexWrap:'wrap',gap:5 }}>{(result.rewritten_cv_sections.skills_to_highlight||[]).map((s,i)=><span key={i} className="badge badge-green">{s}</span>)}</div>
+                  <div style={{ fontSize:12,fontWeight:600,color:'var(--text-tertiary)',textTransform:'uppercase',marginBottom:8 }}>Highlight these skills</div>
+                  <div style={{ display:'flex',flexWrap:'wrap',gap:5 }}>{(result.rewritten_cv_sections.skills_to_highlight||[]).map((s,i)=><span key={i} className="badge badge-pink">{s}</span>)}</div>
                 </div>
                 <div className="card">
-                  <div style={{ fontSize:12,fontWeight:500,color:'var(--text-secondary)',textTransform:'uppercase',marginBottom:8 }}>Learn before applying</div>
+                  <div style={{ fontSize:12,fontWeight:600,color:'var(--text-tertiary)',textTransform:'uppercase',marginBottom:8 }}>Learn before applying</div>
                   <div style={{ display:'flex',flexWrap:'wrap',gap:5 }}>{(result.rewritten_cv_sections.skills_to_add||[]).map((s,i)=><span key={i} className="badge badge-amber">{s}</span>)}</div>
                 </div>
               </div>
@@ -490,7 +478,7 @@ function JDAnalyzer({ sessionId, onCreateApp }) {
               {coverLetter?(
                 <>
                   <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10 }}>
-                    <div style={{ fontSize:12,fontWeight:500,color:'var(--text-secondary)',textTransform:'uppercase' }}>Cover letter</div>
+                    <div style={{ fontSize:12,fontWeight:600,color:'var(--text-tertiary)',textTransform:'uppercase' }}>Cover letter</div>
                     <button className="btn btn-ghost btn-sm" onClick={()=>navigator.clipboard.writeText(coverLetter)}>Copy</button>
                   </div>
                   <div style={{ fontSize:13,lineHeight:1.8,whiteSpace:'pre-wrap',color:'var(--text)' }}>{coverLetter}</div>
@@ -539,23 +527,24 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
         .map(job=>({...job,match_score:scoreJob(job,skills)}))
         .filter(job=>{
           if(region==='egypt'){
+            // Loosened: accept Egypt-tagged jobs, Wuzzuf source, or remote jobs
             const loc=(job.location||'').toLowerCase()
             const ctr=(job.country||'').toLowerCase()
-            // Tokenize so 'EG' matches as a word, not inside 'engineer' or 'manager'
-            const locTokens=new Set(loc.split(/[\s,./|-]+/).filter(Boolean))
-            const ctrTokens=new Set(ctr.split(/[\s,./|-]+/).filter(Boolean))
-            const EG_WORDS=new Set(['egypt','cairo','cair','alexandria','alex','giza','eg','egy'])
-            const isEgyptLoc=[...locTokens].some(t=>EG_WORDS.has(t))
-            const isEgyptCtr=[...ctrTokens].some(t=>EG_WORDS.has(t))
-            const isEgyptSource=job.source==='wuzzuf'
-            const isRemoteAnywhere=job.remote&&(loc.includes('worldwide')||loc.includes('anywhere')||loc.includes('remote')||loc===''||job.source==='remotive'||job.source==='arbeitnow')
-            return isEgyptLoc||isEgyptCtr||isEgyptSource||isRemoteAnywhere
+            const src=(job.source||'').toLowerCase()
+            const EG_TERMS=['egypt','cairo','alexandria','giza','alex','hurghada','luxor','mansoura','tanta']
+            const isEgyptLoc=EG_TERMS.some(t=>loc.includes(t))
+            const isEgyptCtr=ctr==='eg'||ctr==='egy'||ctr==='egypt'
+            const isWuzzuf=src==='wuzzuf'
+            // Also include remote jobs that welcome Egyptian applicants
+            const isRemoteFriendly=job.remote&&!loc.includes('us only')&&!loc.includes('eu only')&&!loc.includes('uk only')&&!loc.includes('us only')
+            return isEgyptLoc||isEgyptCtr||isWuzzuf||isRemoteFriendly
           }
-          if(region==='remote') return job.remote
+          if(region==='remote') return job.remote===true
+          // Worldwide: show everything
           return true
         })
-        .filter(job=>job.match_score>=50)          // 50% threshold
-        .sort((a,b)=>b.match_score-a.match_score)  // ranked by fit
+        .filter(job=>job.match_score>=45)
+        .sort((a,b)=>b.match_score-a.match_score)
       setJobs(scored)
     } catch(e){ console.error(e) }
     finally { setLoading(false) }
@@ -566,9 +555,7 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
   const refresh=async()=>{
     setRefreshing(true)
     try {
-      // Clear cached demo jobs first
       await fetch('/api/jobs/clear-demos', { method: 'DELETE' })
-      // Trigger real fetch and wait for it
       const skills=profile?.analysis?.skills||[]
       await api.refreshJobsSync(skills)
     } catch(e){ console.error(e) }
@@ -576,8 +563,8 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
     setRefreshing(false)
   }
 
-  const srcColor={wuzzuf:'badge-amber',linkedin:'badge-purple',adzuna:'badge-green',google_jobs:'badge-green',remotive:'badge-green',arbeitnow:'badge-purple',indeed:'badge-amber',linkedin:'badge-purple',glassdoor:'badge-green',jsearch:'badge-green',demo:'badge-gray'}
-  const matchColor=s=>s>=85?'var(--accent)':s>=75?'var(--amber)':'var(--coral)'
+  const srcBadge={wuzzuf:'badge-pink',linkedin:'badge-blue',adzuna:'badge-green',google_jobs:'badge-green',remotive:'badge-green',arbeitnow:'badge-purple',indeed:'badge-amber',glassdoor:'badge-green',jsearch:'badge-blue',demo:'badge-gray'}
+  const matchColor=s=>s>=85?'var(--success)':s>=70?'var(--amber)':'var(--coral)'
 
   return (
     <div style={{ display:'grid',gridTemplateColumns:selected?'1fr 1.3fr':'1fr',gap:10 }}>
@@ -585,7 +572,7 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
         <div style={{ display:'flex',alignItems:'center',gap:6,marginBottom:10,flexWrap:'wrap' }}>
           {[{value:'egypt',label:'🇪🇬 Egypt'},{value:'remote',label:'🌐 Remote'},{value:'worldwide',label:'🌍 Worldwide'}].map(opt=>(
             <button key={opt.value} onClick={()=>setRegion(opt.value)}
-              style={{ padding:'5px 12px',borderRadius:20,border:region===opt.value?'1.5px solid var(--accent)':'1.5px solid var(--border-light)',background:region===opt.value?'var(--accent-light)':'transparent',color:region===opt.value?'var(--accent)':'var(--text-secondary)',fontSize:12,fontWeight:region===opt.value?600:400,cursor:'pointer' }}>
+              style={{ padding:'6px 14px',borderRadius:30,border:region===opt.value?'1.5px solid var(--accent)':'1.5px solid var(--border)',background:region===opt.value?'var(--accent-light)':'transparent',color:region===opt.value?'var(--accent)':'var(--text-secondary)',fontSize:12,fontWeight:region===opt.value?600:400,cursor:'pointer',transition:'all 0.15s' }}>
               {opt.label}
             </button>
           ))}
@@ -598,32 +585,31 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
           </button>
         </div>
         {loading
-          ? <div style={{ textAlign:'center',padding:'3rem',color:'var(--text-secondary)' }}><Spinner/></div>
+          ? <div style={{ textAlign:'center',padding:'4rem',color:'var(--text-secondary)' }}><Spinner/></div>
           : jobs.length===0
             ? <div style={{ textAlign:'center',padding:'3rem' }}>
                 <div style={{ color:'var(--text-secondary)',marginBottom:12 }}>No jobs found yet.</div>
                 <button className="btn btn-primary" onClick={refresh} disabled={refreshing}>
-                  {refreshing?<><Spinner/> Fetching real jobs…</>:<><RefreshCw size={13}/> Fetch jobs now</>}
+                  {refreshing?<><Spinner/> Fetching jobs…</>:<><RefreshCw size={13}/> Fetch jobs now</>}
                 </button>
-                {settings?.jsearch_api_key===''&&<div style={{ fontSize:12,color:'var(--text-secondary)',marginTop:10 }}>Add a <strong>JSEARCH_API_KEY</strong> in Render env vars to get real jobs from Indeed, LinkedIn &amp; Glassdoor.</div>}
               </div>
             : jobs.map(job=>(
-                <div key={job.id} className="card" style={{ marginBottom:8,cursor:'pointer',border:selected?.id===job.id?'1px solid var(--accent)':undefined }}
+                <div key={job.id} className="card" style={{ marginBottom:8,cursor:'pointer',border:selected?.id===job.id?'1.5px solid var(--accent)':'1px solid var(--border)',transition:'border 0.15s' }}
                   onClick={()=>setSelected(selected?.id===job.id?null:job)}>
                   <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,marginBottom:6 }}>
                     <div style={{ flex:1,minWidth:0 }}>
                       <div style={{ fontWeight:600,marginBottom:2 }}>{job.title}</div>
                       <div style={{ fontSize:13,color:'var(--text-secondary)' }}>{job.company} · {job.location}</div>
-                      {(job.salary_min||job.salary_max)&&<div style={{ fontSize:12,color:'var(--accent)',marginTop:4 }}>{job.salary_min&&job.salary_max?`${Math.round(job.salary_min/1000)}k – ${Math.round(job.salary_max/1000)}k`:''}</div>}
+                      {(job.salary_min||job.salary_max)&&<div style={{ fontSize:12,color:'var(--accent)',marginTop:4,fontWeight:500 }}>{job.salary_min&&job.salary_max?`${Math.round(job.salary_min/1000)}k – ${Math.round(job.salary_max/1000)}k`:''}</div>}
                     </div>
                     <div style={{ display:'flex',gap:5,flexShrink:0,flexDirection:'column',alignItems:'flex-end' }}>
                       {job.remote&&<span className="badge badge-green">Remote</span>}
-                      <span className={`badge ${srcColor[job.source]||'badge-gray'}`}>{job.source}</span>
+                      <span className={`badge ${srcBadge[job.source]||'badge-gray'}`}>{job.source}</span>
                     </div>
                   </div>
                   <div style={{ display:'flex',alignItems:'center',gap:8 }}>
-                    <div style={{ flex:1,height:4,background:'var(--border-light)',borderRadius:2,overflow:'hidden' }}>
-                      <div style={{ width:`${job.match_score}%`,height:'100%',background:matchColor(job.match_score),borderRadius:2 }} />
+                    <div style={{ flex:1,height:5,background:'var(--border-light)',borderRadius:3,overflow:'hidden' }}>
+                      <div style={{ width:`${job.match_score}%`,height:'100%',background:matchColor(job.match_score),borderRadius:3 }} />
                     </div>
                     <span style={{ fontSize:11,fontWeight:600,color:matchColor(job.match_score),flexShrink:0 }}>{job.match_score}% match</span>
                   </div>
@@ -633,11 +619,11 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
         }
       </div>
       {selected&&(
-        <div className="card" style={{ height:'fit-content',position:'sticky',top:10 }}>
+        <div className="card" style={{ height:'fit-content',position:'sticky',top:10,borderColor:'var(--border)' }}>
           <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:12 }}>
             <div>
-              <div style={{ fontWeight:600,fontSize:15 }}>{selected.title}</div>
-              <div style={{ color:'var(--text-secondary)',marginTop:2 }}>{selected.company} · {selected.location}</div>
+              <div style={{ fontWeight:700,fontSize:15 }}>{selected.title}</div>
+              <div style={{ color:'var(--text-secondary)',marginTop:2,fontSize:13 }}>{selected.company} · {selected.location}</div>
               <div style={{ marginTop:6,display:'flex',alignItems:'center',gap:8 }}>
                 <div style={{ flex:1,height:5,background:'var(--border-light)',borderRadius:3,overflow:'hidden',maxWidth:120 }}>
                   <div style={{ width:`${selected.match_score}%`,height:'100%',background:matchColor(selected.match_score) }} />
@@ -693,6 +679,7 @@ function ApplicationsTracker({ sessionId, applications, onRefresh }) {
 
   const cols=['saved','applied','interview','offer','rejected']
   const byStatus=Object.fromEntries(cols.map(c=>[c,applications.filter(a=>a.status===c)]))
+  const colColors={saved:'var(--accent2)',applied:'var(--amber)',interview:'var(--lavender)',offer:'var(--success)',rejected:'var(--coral)'}
 
   return (
     <div>
@@ -702,11 +689,11 @@ function ApplicationsTracker({ sessionId, applications, onRefresh }) {
       <div style={{ display:'flex',gap:8,overflowX:'auto',paddingBottom:4 }}>
         {cols.map(col=>(
           <div key={col} style={{ minWidth:200,flex:1 }}>
-            <div style={{ fontWeight:500,fontSize:12,color:'var(--text-secondary)',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8,display:'flex',alignItems:'center',gap:6 }}>
-              {col}<span style={{ background:'var(--border-light)',borderRadius:20,padding:'1px 7px',fontSize:11 }}>{byStatus[col].length}</span>
+            <div style={{ fontWeight:600,fontSize:12,color:colColors[col],textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8,display:'flex',alignItems:'center',gap:6 }}>
+              {col}<span style={{ background:'var(--border-light)',borderRadius:20,padding:'1px 7px',fontSize:11,color:'var(--text-secondary)',fontWeight:400 }}>{byStatus[col].length}</span>
             </div>
             {byStatus[col].map(app=>(
-              <div key={app.id} className="card" style={{ marginBottom:8,fontSize:13 }}>
+              <div key={app.id} className="card" style={{ marginBottom:8,fontSize:13,borderTop:`2px solid ${colColors[col]}` }}>
                 <div style={{ fontWeight:600,marginBottom:2 }}>{app.company}</div>
                 <div style={{ color:'var(--text-secondary)',marginBottom:8 }}>{app.role}</div>
                 {app.match_score>0&&<div style={{ fontSize:12,color:'var(--accent)',marginBottom:6 }}>Match: <strong>{app.match_score}%</strong></div>}
@@ -727,9 +714,9 @@ function ApplicationsTracker({ sessionId, applications, onRefresh }) {
       </div>
 
       {showAdd&&(
-        <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999 }}>
+        <div style={{ position:'fixed',inset:0,background:'rgba(45,26,36,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999 }}>
           <div className="card" style={{ maxWidth:440,width:'90%' }}>
-            <div style={{ fontWeight:600,fontSize:15,marginBottom:12 }}>Add job manually</div>
+            <div style={{ fontWeight:700,fontSize:15,marginBottom:12 }}>Add job manually</div>
             <div style={{ display:'flex',flexDirection:'column',gap:8,marginBottom:16 }}>
               <input placeholder="Company name *" value={manualForm.company} onChange={e=>setManualForm(f=>({...f,company:e.target.value}))} />
               <input placeholder="Role / Position *" value={manualForm.role} onChange={e=>setManualForm(f=>({...f,role:e.target.value}))} />
@@ -747,10 +734,10 @@ function ApplicationsTracker({ sessionId, applications, onRefresh }) {
       )}
 
       {autoApplyId&&(
-        <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999 }}>
+        <div style={{ position:'fixed',inset:0,background:'rgba(45,26,36,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999 }}>
           <div className="card" style={{ maxWidth:420,width:'90%' }}>
-            <div style={{ fontWeight:600,fontSize:15,marginBottom:4 }}>Auto-Apply</div>
-            <div style={{ fontSize:13,color:'var(--text-secondary)',marginBottom:16 }}>Supports LinkedIn Easy Apply, Wuzzuf, and generic forms. Requires <code>AUTO_APPLY_ENABLED=true</code> in <code>.env</code>.</div>
+            <div style={{ fontWeight:700,fontSize:15,marginBottom:4 }}>Auto-Apply</div>
+            <div style={{ fontSize:13,color:'var(--text-secondary)',marginBottom:16 }}>Supports LinkedIn Easy Apply, Wuzzuf, and generic forms.</div>
             <div style={{ display:'flex',flexDirection:'column',gap:8,marginBottom:16 }}>
               <input placeholder="Phone number" value={phone} onChange={e=>setPhone(e.target.value)} />
               <input placeholder="LinkedIn URL (optional)" value={linkedinUrl} onChange={e=>setLinkedinUrl(e.target.value)} />
@@ -766,22 +753,22 @@ function ApplicationsTracker({ sessionId, applications, onRefresh }) {
       )}
 
       {selectedApp&&(
-        <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999 }}>
+        <div style={{ position:'fixed',inset:0,background:'rgba(45,26,36,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999 }}>
           <div className="card" style={{ maxWidth:560,width:'90%',maxHeight:'80vh',overflowY:'auto' }}>
             <div style={{ display:'flex',justifyContent:'space-between',marginBottom:12 }}>
-              <div><div style={{ fontWeight:600,fontSize:15 }}>{selectedApp.company}</div><div style={{ color:'var(--text-secondary)' }}>{selectedApp.role}</div></div>
+              <div><div style={{ fontWeight:700,fontSize:15 }}>{selectedApp.company}</div><div style={{ color:'var(--text-secondary)' }}>{selectedApp.role}</div></div>
               <button className="btn btn-ghost btn-sm" onClick={()=>setSelectedApp(null)}><X size={14}/></button>
             </div>
             {selectedApp.cover_letter&&(
-              <><div style={{ fontWeight:500,marginBottom:6 }}>Cover letter</div>
-              <div style={{ fontSize:13,lineHeight:1.7,background:'var(--border-light)',padding:12,borderRadius:'var(--radius-sm)',marginBottom:12,whiteSpace:'pre-wrap' }}>{selectedApp.cover_letter}</div></>
+              <><div style={{ fontWeight:600,marginBottom:6 }}>Cover letter</div>
+              <div style={{ fontSize:13,lineHeight:1.7,background:'var(--surface-pink)',padding:12,borderRadius:'var(--radius-sm)',marginBottom:12,whiteSpace:'pre-wrap',border:'1px solid var(--border)' }}>{selectedApp.cover_letter}</div></>
             )}
             {selectedApp.tailored_bullets?.length>0&&(
-              <><div style={{ fontWeight:500,marginBottom:6 }}>Tailored bullets</div>
+              <><div style={{ fontWeight:600,marginBottom:6 }}>Tailored bullets</div>
               {selectedApp.tailored_bullets.map((b,i)=><div key={i} style={{ fontSize:13,padding:'7px 10px',background:'var(--accent-light)',borderRadius:'var(--radius-sm)',borderLeft:'2px solid var(--accent)',marginBottom:5 }}>• {b}</div>)}</>
             )}
             {selectedApp.missing_keywords?.length>0&&(
-              <><div style={{ fontWeight:500,margin:'10px 0 6px' }}>Missing keywords</div>
+              <><div style={{ fontWeight:600,margin:'10px 0 6px' }}>Missing keywords</div>
               <div style={{ display:'flex',flexWrap:'wrap',gap:5 }}>{selectedApp.missing_keywords.map((k,i)=><span key={i} className="badge badge-coral">{k}</span>)}</div></>
             )}
             {selectedApp.apply_url&&<a href={selectedApp.apply_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm" style={{ marginTop:14,display:'inline-flex' }}><ExternalLink size={12}/> Open application</a>}
@@ -816,13 +803,13 @@ function InterviewPrep({ sessionId, profile }) {
     catch(e){ alert(e.message) }
     finally{ setLoadingFB(false) }
   }
-  const catColor={technical:'badge-purple',behavioural:'badge-gray',project:'badge-green','system-design':'badge-amber'}
+  const catColor={technical:'badge-blue',behavioural:'badge-gray',project:'badge-green','system-design':'badge-amber',sales:'badge-pink',hr:'badge-purple',finance:'badge-amber',marketing:'badge-green'}
 
   return (
     <div>
       <div className="card" style={{ marginBottom:10 }}>
         <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10 }}>
-          <input placeholder="Role (e.g. Backend Engineer)" value={role} onChange={e=>setRole(e.target.value)} />
+          <input placeholder="Role (e.g. HR Manager, Sales Director, Engineer…)" value={role} onChange={e=>setRole(e.target.value)} />
           <input placeholder="Company (optional)" value={company} onChange={e=>setCompany(e.target.value)} />
         </div>
         <button className="btn btn-primary" onClick={generate} disabled={loading||!role}>
@@ -844,13 +831,13 @@ function InterviewPrep({ sessionId, profile }) {
                 <button className="btn btn-ghost btn-sm" onClick={()=>{setPracticing(null);setAnswer('');setFeedback(null)}}>Cancel</button>
               </div>
               {feedback&&(
-                <div style={{ marginTop:12,padding:12,background:'var(--border-light)',borderRadius:'var(--radius-sm)' }}>
+                <div style={{ marginTop:12,padding:12,background:'var(--surface-pink)',borderRadius:'var(--radius-sm)',border:'1px solid var(--border)' }}>
                   <div style={{ display:'flex',gap:8,alignItems:'center',marginBottom:8 }}>
-                    <span style={{ fontWeight:600,fontSize:20 }}>{feedback.score}/10</span>
+                    <span style={{ fontWeight:700,fontSize:20,color:'var(--text)' }}>{feedback.score}/10</span>
                     <span className={`badge ${feedback.score>=7?'badge-green':feedback.score>=5?'badge-amber':'badge-coral'}`}>{feedback.verdict}</span>
                   </div>
-                  {feedback.what_worked?.length>0&&<div style={{ marginBottom:8 }}><div style={{ fontSize:12,fontWeight:500,color:'var(--accent)',marginBottom:4 }}>What worked</div>{feedback.what_worked.map((w,j)=><div key={j} style={{ fontSize:13,marginBottom:2 }}>✓ {w}</div>)}</div>}
-                  {feedback.what_to_improve?.length>0&&<div style={{ marginBottom:8 }}><div style={{ fontSize:12,fontWeight:500,color:'var(--coral)',marginBottom:4 }}>Improve</div>{feedback.what_to_improve.map((w,j)=><div key={j} style={{ fontSize:13,marginBottom:2 }}>→ {w}</div>)}</div>}
+                  {feedback.what_worked?.length>0&&<div style={{ marginBottom:8 }}><div style={{ fontSize:12,fontWeight:600,color:'var(--success)',marginBottom:4 }}>What worked</div>{feedback.what_worked.map((w,j)=><div key={j} style={{ fontSize:13,marginBottom:2 }}>✓ {w}</div>)}</div>}
+                  {feedback.what_to_improve?.length>0&&<div style={{ marginBottom:8 }}><div style={{ fontSize:12,fontWeight:600,color:'var(--coral)',marginBottom:4 }}>Improve</div>{feedback.what_to_improve.map((w,j)=><div key={j} style={{ fontSize:13,marginBottom:2 }}>→ {w}</div>)}</div>}
                   <div style={{ fontSize:13,color:'var(--text-secondary)',borderTop:'1px solid var(--border)',paddingTop:8,marginTop:8 }}><strong>Ideal answer:</strong> {feedback.ideal_answer_outline}</div>
                 </div>
               )}
@@ -874,14 +861,14 @@ function Upskill({ profile }) {
       {certs.length===0&&projects.length===0&&<div style={{ textAlign:'center',padding:'3rem',color:'var(--text-secondary)' }}>Upload your CV to get personalized upskill recommendations.</div>}
       {certs.length>0&&(
         <div className="card" style={{ marginBottom:10 }}>
-          <div style={{ fontSize:12,fontWeight:500,color:'var(--text-secondary)',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:12 }}>Certifications (ranked by ROI for your gaps)</div>
+          <div style={{ fontSize:12,fontWeight:600,color:'var(--text-tertiary)',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:12 }}>Certifications (ranked by ROI for your gaps)</div>
           {certs.map((c,i)=>(
             <div key={i} style={{ display:'flex',gap:10,padding:'10px 0',borderBottom:i<certs.length-1?'1px solid var(--border-light)':'none',alignItems:'flex-start' }}>
-              <div style={{ width:28,height:28,background:'var(--accent2-light)',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:600,color:'#3C3489',flexShrink:0 }}>{c.priority}</div>
+              <div style={{ width:28,height:28,background:'var(--accent2-light)',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:'var(--accent2-dark)',flexShrink:0 }}>{c.priority}</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:500,marginBottom:2 }}>{c.name}</div>
                 <div style={{ fontSize:12,color:'var(--text-secondary)',marginBottom:2 }}>{c.provider} · {c.reason}</div>
-                <span style={{ fontSize:11,color:'var(--accent)',fontWeight:500 }}>{c.score_impact}</span>
+                <span style={{ fontSize:11,color:'var(--accent)',fontWeight:600 }}>{c.score_impact}</span>
               </div>
             </div>
           ))}
@@ -889,7 +876,7 @@ function Upskill({ profile }) {
       )}
       {projects.length>0&&(
         <div className="card">
-          <div style={{ fontSize:12,fontWeight:500,color:'var(--text-secondary)',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:12 }}>Project ideas (tailored to your profile)</div>
+          <div style={{ fontSize:12,fontWeight:600,color:'var(--text-tertiary)',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:12 }}>Project ideas (tailored to your profile)</div>
           {projects.map((p,i)=>(
             <div key={i} style={{ padding:'10px 0',borderBottom:i<projects.length-1?'1px solid var(--border-light)':'none' }}>
               <div style={{ display:'flex',gap:8,alignItems:'center',marginBottom:4 }}>
@@ -911,15 +898,15 @@ function BulletRewriter({ profile }) {
   const bullets=profile?.analysis?.rewritten_bullets||[]
   return (
     <div>
-      <div style={{ padding:'10px 14px',background:'var(--accent2-light)',borderRadius:'var(--radius-sm)',fontSize:13,color:'#3C3489',marginBottom:12 }}>
+      <div style={{ padding:'10px 14px',background:'var(--accent2-light)',borderRadius:'var(--radius-sm)',fontSize:13,color:'var(--accent2-dark)',marginBottom:12,border:'1px solid var(--border-blue)' }}>
         Every bullet rewritten: <strong>Action verb → Metric → Business impact</strong>. Copy the improved versions into your CV.
       </div>
       {bullets.length===0&&<div style={{ textAlign:'center',padding:'3rem',color:'var(--text-secondary)' }}>Upload your CV to see rewritten bullets.</div>}
       {bullets.map((b,i)=>(
         <div key={i} className="card" style={{ marginBottom:8 }}>
-          <div style={{ fontSize:11,fontWeight:500,color:'var(--text-tertiary)',marginBottom:4 }}>BEFORE</div>
+          <div style={{ fontSize:11,fontWeight:600,color:'var(--text-tertiary)',marginBottom:4,textTransform:'uppercase' }}>Before</div>
           <div style={{ fontSize:13,color:'var(--text-secondary)',padding:'8px 12px',background:'var(--border-light)',borderRadius:'var(--radius-sm)',borderLeft:'2px solid var(--border)',marginBottom:8 }}>{b.original||b}</div>
-          <div style={{ fontSize:11,fontWeight:500,color:'var(--accent)',marginBottom:4 }}>AFTER</div>
+          <div style={{ fontSize:11,fontWeight:600,color:'var(--accent)',marginBottom:4,textTransform:'uppercase' }}>After</div>
           <div style={{ fontSize:13,padding:'8px 12px',background:'var(--accent-light)',borderRadius:'var(--radius-sm)',borderLeft:'2px solid var(--accent)',marginBottom:6 }}>{b.rewritten||b}</div>
           {b.improvement&&<div style={{ fontSize:12,color:'var(--text-secondary)' }}>💡 {b.improvement}</div>}
           <button className="btn btn-ghost btn-sm" style={{ marginTop:6 }} onClick={()=>navigator.clipboard.writeText(b.rewritten||b)}>Copy</button>
@@ -1022,34 +1009,45 @@ export default function App() {
 
   return (
     <div style={{ display:'flex',minHeight:'100vh' }}>
-      <div style={{ width:200,background:'var(--surface)',borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column',padding:'1rem 0',flexShrink:0 }}>
+      {/* Sidebar */}
+      <div style={{ width:210,background:'white',borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column',padding:'1rem 0',flexShrink:0,boxShadow:'1px 0 12px rgba(196,84,122,0.06)' }}>
+        {/* Brand */}
         <div style={{ padding:'0 1rem 1rem',borderBottom:'1px solid var(--border-light)',marginBottom:'0.75rem' }}>
-          <div style={{ display:'flex',alignItems:'center',gap:8 }}>
-            <div style={{ width:30,height:30,background:'var(--accent)',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center' }}><Bot size={16} color="white"/></div>
-            <div><div style={{ fontWeight:600,fontSize:13 }}>Career Copilot</div><div style={{ fontSize:11,color:'var(--text-secondary)' }}>Egypt Jobs</div></div>
+          <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:10 }}>
+            <div style={{ width:32,height:32,background:'linear-gradient(135deg,#C4547A,#D4729A)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(196,84,122,0.3)' }}>
+              <Sparkles size={16} color="white"/>
+            </div>
+            <div>
+              <div style={{ fontWeight:700,fontSize:13,letterSpacing:'-0.01em' }}>Career Copilot</div>
+              <div style={{ fontSize:10,color:'var(--text-secondary)' }}>Any field · Any role</div>
+            </div>
           </div>
-          <div style={{ marginTop:10,padding:'8px 10px',background:'var(--border-light)',borderRadius:'var(--radius-sm)' }}>
-            <div style={{ fontWeight:500,fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{authUser.email}</div>
-            <div style={{ fontSize:11,color:'var(--accent)',marginTop:2 }}>ATS: {profile.ats_score}/100 · v{cvHistory.length}</div>
+          {/* User card */}
+          <div style={{ padding:'8px 10px',background:'var(--surface-pink)',borderRadius:'var(--radius-sm)',border:'1px solid var(--border)' }}>
+            <div style={{ fontWeight:600,fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'var(--text)' }}>{authUser.email}</div>
+            <div style={{ fontSize:11,color:'var(--accent)',marginTop:2,fontWeight:500 }}>ATS: {profile.ats_score}/100 · v{cvHistory.length}</div>
             {cvHistory.length>1&&(
-              <button className="btn btn-ghost btn-sm" style={{ marginTop:5,width:'100%',fontSize:10,padding:'2px 6px' }} onClick={()=>setShowCompare(true)}>
+              <button className="btn btn-ghost btn-sm" style={{ marginTop:5,width:'100%',fontSize:10,padding:'2px 6px',borderRadius:20 }} onClick={()=>setShowCompare(true)}>
                 <History size={10}/> Compare versions
               </button>
             )}
           </div>
         </div>
+        {/* Nav */}
         {TABS.map(({id,label,Icon})=>(
           <button key={id} onClick={()=>setTab(id)}
-            style={{ display:'flex',alignItems:'center',gap:9,padding:'9px 1rem',fontSize:13,fontWeight:tab===id?500:400,color:tab===id?'var(--accent)':'var(--text-secondary)',background:tab===id?'var(--accent-light)':'transparent',border:'none',cursor:'pointer',textAlign:'left',borderLeft:tab===id?'3px solid var(--accent)':'3px solid transparent',transition:'all 0.12s' }}>
+            style={{ display:'flex',alignItems:'center',gap:9,padding:'9px 1rem',fontSize:13,fontWeight:tab===id?600:400,color:tab===id?'var(--accent)':'var(--text-secondary)',background:tab===id?'linear-gradient(90deg,var(--accent-light),transparent)':'transparent',border:'none',cursor:'pointer',textAlign:'left',borderLeft:tab===id?'3px solid var(--accent)':'3px solid transparent',transition:'all 0.12s' }}>
             <Icon size={15}/>{label}
-            {id==='tracker'&&applications.length>0&&<span style={{ marginLeft:'auto',background:'var(--accent2-light)',color:'#3C3489',borderRadius:20,padding:'1px 6px',fontSize:10 }}>{applications.length}</span>}
+            {id==='tracker'&&applications.length>0&&<span style={{ marginLeft:'auto',background:'var(--accent-light)',color:'var(--accent)',borderRadius:20,padding:'1px 6px',fontSize:10,fontWeight:600 }}>{applications.length}</span>}
           </button>
         ))}
+        {/* Footer actions */}
         <div style={{ marginTop:'auto',padding:'0.75rem 1rem',borderTop:'1px solid var(--border-light)',display:'flex',flexDirection:'column',gap:6 }}>
-          <button className="btn btn-ghost btn-sm" style={{ width:'100%',justifyContent:'center' }} onClick={()=>setShowUpload(true)}><Upload size={12}/> New CV</button>
-          <button className="btn btn-ghost btn-sm" style={{ width:'100%',justifyContent:'center' }} onClick={handleLogout}><LogOut size={12}/> Log out</button>
+          <button className="btn btn-ghost btn-sm" style={{ width:'100%',justifyContent:'center',borderRadius:20 }} onClick={()=>setShowUpload(true)}><Upload size={12}/> New CV</button>
+          <button className="btn btn-ghost btn-sm" style={{ width:'100%',justifyContent:'center',borderRadius:20 }} onClick={handleLogout}><LogOut size={12}/> Log out</button>
         </div>
       </div>
+      {/* Main */}
       <div style={{ flex:1,overflow:'auto',padding:'1.25rem' }}>
         <div style={{ maxWidth:1100,margin:'0 auto' }}>
           {tab==='dashboard'&&<Dashboard profile={profile} applications={applications}/>}
