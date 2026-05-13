@@ -519,13 +519,13 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
   const [region,setRegion]=useState('egypt')
 
   const scoreJob=useCallback((job,skills)=>{
-    if(!skills||skills.length===0) return Math.floor(Math.random()*20)+70
+    if(!skills||skills.length===0) return Math.floor(Math.random()*20)+60
     const jdText=`${job.title} ${job.description} ${job.company}`.toLowerCase()
     const matched=skills.filter(s=>jdText.includes(s.toLowerCase()))
-    const skillScore=(matched.length/skills.length)*60
+    const skillScore=(matched.length/Math.max(skills.length,1))*40
     const titleWords=job.title.toLowerCase().split(/\s+/)
-    const titleBonus=skills.some(s=>titleWords.some(w=>w.includes(s.toLowerCase())||s.toLowerCase().includes(w)))?25:0
-    return Math.min(99,Math.round(30+skillScore+titleBonus))
+    const titleBonus=skills.some(s=>titleWords.some(w=>w.includes(s.toLowerCase())||s.toLowerCase().includes(w)))?20:0
+    return Math.min(99,Math.round(45+skillScore+titleBonus))
   },[])
 
   const load=useCallback(async()=>{
@@ -548,7 +548,7 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
           if(region==='remote') return job.remote
           return true
         })
-        .filter(job=>job.match_score>=70)          // 70% threshold
+        .filter(job=>job.match_score>=50)          // 50% threshold
         .sort((a,b)=>b.match_score-a.match_score)  // ranked by fit
       setJobs(scored)
     } catch(e){ console.error(e) }

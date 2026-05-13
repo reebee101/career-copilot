@@ -1,80 +1,133 @@
 import httpx
 import re
+import json
 from datetime import datetime
 from config import get_settings
 
 settings = get_settings()
-
 ADZUNA_BASE = "https://api.adzuna.com/v1/api/jobs"
+COUNTRY_MAP = {"gb": "United Kingdom", "us": "United States", "ae": "UAE", "eg": "Egypt"}
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.5",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "DNT": "1",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
 }
-
-COUNTRY_MAP = {"gb": "United Kingdom", "us": "United States", "ae": "UAE", "eg": "Egypt"}
 
 
 # ── Wuzzuf scraper ─────────────────────────────────────────────
 
 async def search_jobs_wuzzuf(cv_skills: list[str] = None) -> list[dict]:
-    """Scrape Wuzzuf.net for Egypt jobs matching CV skills (any field)."""
-    # Use actual CV skills as keywords — works for any profession
-    if cv_skills and len(cv_skills) >= 2:
-        # Build targeted search queries from CV skills
-        keywords = cv_skills[:4]
-    else:
-        keywords = ["software engineer", "developer", "analyst", "manager"]
-
+    """Scrape Wuzzuf.net — robust multi-pattern extractor."""
+    keywords = (cv_skills[:3] if cv_skills else ["software engineer", "developer", "data analyst"])
     results = []
     seen = set()
 
-    async with httpx.AsyncClient(timeout=20.0, headers=HEADERS, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=25.0, headers=HEADERS, follow_redirects=True) as client:
         for kw in keywords[:3]:
             try:
                 resp = await client.get(
                     "https://wuzzuf.net/search/jobs/",
-                    params={"q": kw, "filters[country][0]": "Egypt"}
+                    params={"q": kw, "filters[country][0]": "Egypt", "start": 0}
                 )
                 if resp.status_code != 200:
+                    print(f"[Wuzzuf] HTTP {resp.status_code} for '{kw}'")
                     continue
 
                 html = resp.text
 
-                job_titles = re.findall(
-                    r'<h2[^>]*class="[^"]*css-m604qf[^"]*"[^>]*>.*?<a[^>]+href="(/jobs/[^"]+)"[^>]*>([^<]+)</a>',
-                    html, re.DOTALL
-                )
-                companies_raw = re.findall(r'class="[^"]*css-17s97q8[^"]*"[^>]*>([^<]+)</a>', html)
-                locations_raw = re.findall(r'class="[^"]*css-5wys0e[^"]*"[^>]*>([^<]+)</span>', html)
+                # Pattern 1: JSON-LD structured data (most reliable)
+                json_ld = re.findall(r'<script type="application/ld\+json">(.*?)</script>', html, re.DOTALL)
+                for blob in json_ld:
+                    try:
+                        data = json.loads(blob.strip())
+                        items = data if isinstance(data, list) else [data]
+                        for item in items:
+                            if item.get("@type") == "JobPosting":
+                                url = item.get("url", "")
+                                if not url or url in seen:
+                                    continue
+                                seen.add(url)
+                                loc = item.get("jobLocation", {})
+                                if isinstance(loc, list):
+                                    loc = loc[0] if loc else {}
+                                location = loc.get("address", {}).get("addressLocality", "Egypt") if isinstance(loc.get("address"), dict) else "Cairo, Egypt"
+                                results.append({
+                                    "external_id": f"wuzzuf_{abs(hash(url))}",
+                                    "title": item.get("title", "").strip(),
+                                    "company": item.get("hiringOrganization", {}).get("name", "Company"),
+                                    "location": f"{location}, Egypt",
+                                    "description": item.get("description", "")[:600],
+                                    "apply_url": url,
+                                    "source": "wuzzuf",
+                                    "salary_min": None, "salary_max": None,
+                                    "remote": "remote" in item.get("title", "").lower(),
+                                    "posted_at": datetime.utcnow().isoformat(),
+                                    "country": "eg",
+                                })
+                    except Exception:
+                        pass
 
-                for i, (url_path, title) in enumerate(job_titles[:8]):
-                    full_url = f"https://wuzzuf.net{url_path}"
-                    if full_url in seen:
-                        continue
-                    seen.add(full_url)
+                # Pattern 2: Next.js __NEXT_DATA__ JSON
+                next_data = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
+                if next_data:
+                    try:
+                        nd = json.loads(next_data.group(1))
+                        jobs_arr = (nd.get("props", {}).get("pageProps", {})
+                                    .get("data", {}).get("jobs", []))
+                        for job in jobs_arr[:8]:
+                            slug = job.get("slug", "")
+                            url = f"https://wuzzuf.net/jobs/p/{slug}" if slug else ""
+                            if not url or url in seen:
+                                continue
+                            seen.add(url)
+                            results.append({
+                                "external_id": f"wuzzuf_{abs(hash(url))}",
+                                "title": job.get("title", "").strip(),
+                                "company": job.get("company", {}).get("name", "Company"),
+                                "location": job.get("country", {}).get("title", "Cairo, Egypt"),
+                                "description": job.get("description", "")[:600],
+                                "apply_url": url,
+                                "source": "wuzzuf",
+                                "salary_min": None, "salary_max": None,
+                                "remote": job.get("workType", "") == "remote",
+                                "posted_at": datetime.utcnow().isoformat(),
+                                "country": "eg",
+                            })
+                    except Exception:
+                        pass
 
-                    company = companies_raw[i].strip() if i < len(companies_raw) else "Company"
-                    location = locations_raw[i].strip() if i < len(locations_raw) else "Cairo, Egypt"
-                    remote = "remote" in title.lower() or "remote" in location.lower()
+                # Pattern 3: HTML regex fallback
+                if not any(r["source"] == "wuzzuf" for r in results):
+                    anchors = re.findall(r'href="(/jobs/p/[^"]+)"[^>]*>\s*<[^>]+>\s*([^<]{5,100})', html)
+                    companies = re.findall(r'data-company[^>]*>([^<]{2,60})<', html)
+                    for i, (path, title) in enumerate(anchors[:8]):
+                        url = f"https://wuzzuf.net{path.split('?')[0]}"
+                        if url in seen:
+                            continue
+                        seen.add(url)
+                        results.append({
+                            "external_id": f"wuzzuf_{abs(hash(url))}",
+                            "title": title.strip(),
+                            "company": companies[i].strip() if i < len(companies) else "Company",
+                            "location": "Cairo, Egypt",
+                            "description": f"{title.strip()} position in Egypt. Apply on Wuzzuf.",
+                            "apply_url": url,
+                            "source": "wuzzuf",
+                            "salary_min": None, "salary_max": None,
+                            "remote": "remote" in title.lower(),
+                            "posted_at": datetime.utcnow().isoformat(),
+                            "country": "eg",
+                        })
 
-                    results.append({
-                        "external_id": f"wuzzuf_{abs(hash(full_url))}",
-                        "title": title.strip(),
-                        "company": company,
-                        "location": location if location else "Cairo, Egypt",
-                        "description": f"{title.strip()} at {company} — {location}. Skills required: {', '.join((cv_skills or [])[:3])}. Apply on Wuzzuf.",
-                        "apply_url": full_url,
-                        "source": "wuzzuf",
-                        "salary_min": None,
-                        "salary_max": None,
-                        "remote": remote,
-                        "posted_at": datetime.utcnow().isoformat(),
-                        "country": "eg",
-                    })
+                print(f"[Wuzzuf] '{kw}': {len([r for r in results if r['source'] == 'wuzzuf'])} total")
+
             except Exception as e:
-                print(f"Wuzzuf error ({kw}): {e}")
+                print(f"[Wuzzuf] Error ({kw}): {e}")
 
     return results
 
@@ -82,117 +135,134 @@ async def search_jobs_wuzzuf(cv_skills: list[str] = None) -> list[dict]:
 # ── LinkedIn public job search ─────────────────────────────────
 
 async def search_jobs_linkedin(cv_skills: list[str] = None) -> list[dict]:
-    """Search LinkedIn public job listings for Egypt (any field based on CV skills)."""
-    if cv_skills and len(cv_skills) >= 2:
-        keywords = cv_skills[:3]
-    else:
-        keywords = ["software engineer", "developer", "analyst"]
-
+    """Search LinkedIn public listings for Egypt."""
+    keywords = (cv_skills[:2] if cv_skills else ["software engineer", "developer"])
     results = []
     seen = set()
 
-    async with httpx.AsyncClient(timeout=20.0, headers=HEADERS, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=25.0, headers=HEADERS, follow_redirects=True) as client:
         for kw in keywords[:2]:
             try:
                 resp = await client.get(
-                    "https://www.linkedin.com/jobs/search/",
+                    "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search",
                     params={
                         "keywords": kw,
                         "location": "Egypt",
-                        "f_TPR": "r604800",  # last week
-                        "position": 1,
-                        "pageNum": 0,
+                        "f_TPR": "r604800",
+                        "start": 0,
+                        "count": 10,
                     }
                 )
+
                 if resp.status_code != 200:
-                    continue
+                    # Fallback: try the regular search page
+                    resp = await client.get(
+                        "https://www.linkedin.com/jobs/search/",
+                        params={"keywords": kw, "location": "Egypt", "f_TPR": "r604800"}
+                    )
+                    if resp.status_code != 200:
+                        print(f"[LinkedIn] HTTP {resp.status_code} for '{kw}'")
+                        continue
 
                 html = resp.text
 
-                titles = re.findall(
-                    r'<h3[^>]*class="[^"]*base-search-card__title[^"]*"[^>]*>\s*([^<]+)\s*</h3>', html
-                )
-                companies = re.findall(
-                    r'<h4[^>]*class="[^"]*base-search-card__subtitle[^"]*"[^>]*>.*?<a[^>]*>([^<]+)</a>',
-                    html, re.DOTALL
-                )
-                locations = re.findall(
-                    r'<span[^>]*class="[^"]*job-search-card__location[^"]*"[^>]*>\s*([^<]+)\s*</span>', html
-                )
-                links = re.findall(
-                    r'<a[^>]*class="[^"]*base-card__full-link[^"]*"[^>]*href="([^"]+)"', html
-                )
+                # Extract from JSON-LD
+                json_ld = re.findall(r'<script type="application/ld\+json">(.*?)</script>', html, re.DOTALL)
+                for blob in json_ld:
+                    try:
+                        data = json.loads(blob.strip())
+                        items = data if isinstance(data, list) else [data]
+                        for item in items:
+                            if item.get("@type") == "JobPosting":
+                                url = item.get("url", "").split("?")[0]
+                                if not url or url in seen:
+                                    continue
+                                seen.add(url)
+                                loc = item.get("jobLocation", {})
+                                if isinstance(loc, list):
+                                    loc = loc[0] if loc else {}
+                                location = loc.get("address", {}).get("addressLocality", "Egypt") if isinstance(loc.get("address"), dict) else "Egypt"
+                                results.append({
+                                    "external_id": f"linkedin_{abs(hash(url))}",
+                                    "title": item.get("title", "").strip(),
+                                    "company": item.get("hiringOrganization", {}).get("name", "Company"),
+                                    "location": location,
+                                    "description": item.get("description", "")[:600],
+                                    "apply_url": url,
+                                    "source": "linkedin",
+                                    "salary_min": None, "salary_max": None,
+                                    "remote": "remote" in item.get("title", "").lower(),
+                                    "posted_at": datetime.utcnow().isoformat(),
+                                    "country": "eg",
+                                })
+                    except Exception:
+                        pass
 
-                for i, title in enumerate(titles[:6]):
-                    url = links[i] if i < len(links) else ""
+                # HTML regex fallback
+                titles = re.findall(r'class="base-search-card__title"[^>]*>\s*([^<]{3,100})\s*<', html)
+                companies = re.findall(r'class="base-search-card__subtitle"[^>]*>.*?<[^>]+>([^<]{2,80})<', html, re.DOTALL)
+                locations = re.findall(r'class="job-search-card__location"[^>]*>\s*([^<]{2,80})\s*<', html)
+                links = re.findall(r'href="(https://[^"]*linkedin\.com/jobs/view/[^"?]+)', html)
+
+                for i, title in enumerate(titles[:8]):
+                    url = links[i].split("?")[0] if i < len(links) else ""
                     if not url or url in seen:
                         continue
                     seen.add(url)
-
-                    company = companies[i].strip() if i < len(companies) else "Company"
-                    location = locations[i].strip() if i < len(locations) else "Egypt"
-
                     results.append({
                         "external_id": f"linkedin_{abs(hash(url))}",
                         "title": title.strip(),
-                        "company": company,
-                        "location": location,
-                        "description": f"{title.strip()} at {company} — {location}. Apply on LinkedIn.",
-                        "apply_url": url.split("?")[0],
+                        "company": companies[i].strip() if i < len(companies) else "Company",
+                        "location": locations[i].strip() if i < len(locations) else "Egypt",
+                        "description": f"{title.strip()} role in Egypt. Apply on LinkedIn.",
+                        "apply_url": url,
                         "source": "linkedin",
-                        "salary_min": None,
-                        "salary_max": None,
-                        "remote": "remote" in title.lower() or "remote" in location.lower(),
+                        "salary_min": None, "salary_max": None,
+                        "remote": "remote" in title.lower(),
                         "posted_at": datetime.utcnow().isoformat(),
                         "country": "eg",
                     })
+
+                print(f"[LinkedIn] '{kw}': found {len(results)} total")
+
             except Exception as e:
-                print(f"LinkedIn error ({kw}): {e}")
+                print(f"[LinkedIn] Error ({kw}): {e}")
 
     return results
 
 
 # ── Adzuna (UK/US/UAE) ─────────────────────────────────────────
 
-async def search_jobs_adzuna(keywords: list[str] = None, countries: list[str] = None, max_per_query: int = 10) -> list[dict]:
+async def search_jobs_adzuna(keywords=None, countries=None, max_per_query=10):
     if not settings.adzuna_app_id or not settings.adzuna_api_key:
         return []
-
-    keywords = keywords or ["software engineer", "developer", "analyst"]
+    keywords = keywords or ["software engineer"]
     supported = [c for c in (countries or ["gb", "us", "ae"]) if c != "eg"]
     results = []
     seen_ids = set()
-
     async with httpx.AsyncClient(timeout=15.0) as client:
         for country in supported:
             for kw in keywords[:2]:
                 try:
                     resp = await client.get(
                         f"{ADZUNA_BASE}/{country}/search/1",
-                        params={
-                            "app_id": settings.adzuna_app_id,
-                            "app_key": settings.adzuna_api_key,
-                            "what": kw,
-                            "results_per_page": max_per_query,
-                            "content-type": "application/json",
-                            "sort_by": "date",
-                        }
+                        params={"app_id": settings.adzuna_app_id, "app_key": settings.adzuna_api_key,
+                                "what": kw, "results_per_page": max_per_query, "sort_by": "date"}
                     )
                     if resp.status_code == 200:
                         for job in resp.json().get("results", []):
-                            ext_id = job.get("id", "")
-                            if ext_id not in seen_ids:
-                                seen_ids.add(ext_id)
+                            eid = job.get("id", "")
+                            if eid not in seen_ids:
+                                seen_ids.add(eid)
                                 results.append(_normalize_adzuna(job, country))
                 except Exception as e:
-                    print(f"Adzuna error ({country}/{kw}): {e}")
-
+                    print(f"[Adzuna] Error ({country}/{kw}): {e}")
     return results
 
 
-def _normalize_adzuna(job: dict, country: str) -> dict:
+def _normalize_adzuna(job, country):
     return {
-        "external_id": f"adzuna_{job.get('id', '')}",
+        "external_id": f"adzuna_{job.get('id','')}",
         "title": job.get("title", ""),
         "company": job.get("company", {}).get("display_name", "Unknown"),
         "location": job.get("location", {}).get("display_name", COUNTRY_MAP.get(country, country)),
@@ -207,9 +277,9 @@ def _normalize_adzuna(job: dict, country: str) -> dict:
     }
 
 
-# ── SerpAPI Google Jobs ────────────────────────────────────────
+# ── SerpAPI ────────────────────────────────────────────────────
 
-async def search_jobs_serpapi(keyword: str = "software engineer Egypt") -> list[dict]:
+async def search_jobs_serpapi(keyword="software engineer Egypt"):
     if not settings.serpapi_key:
         return []
     async with httpx.AsyncClient(timeout=15.0) as client:
@@ -221,11 +291,11 @@ async def search_jobs_serpapi(keyword: str = "software engineer Egypt") -> list[
             if resp.status_code == 200:
                 return [_normalize_serpapi(j) for j in resp.json().get("jobs_results", [])]
         except Exception as e:
-            print(f"SerpAPI error: {e}")
+            print(f"[SerpAPI] Error: {e}")
     return []
 
 
-def _normalize_serpapi(job: dict) -> dict:
+def _normalize_serpapi(job):
     return {
         "external_id": f"serp_{abs(hash(job.get('title','') + job.get('company_name','')))}",
         "title": job.get("title", ""),
@@ -241,89 +311,28 @@ def _normalize_serpapi(job: dict) -> dict:
     }
 
 
-# ── Demo fallback (any-field) ──────────────────────────────────
+# ── Demo fallback ──────────────────────────────────────────────
 
-def _demo_jobs() -> list[dict]:
-    """Diverse demo jobs covering multiple fields — not just AI/ML."""
+def _demo_jobs():
     return [
-        {
-            "external_id": "demo_001", "title": "Software Engineer – Backend",
-            "company": "Vodafone Egypt", "location": "Cairo, Egypt",
-            "description": "Build scalable backend services using Python and Go. Microservices, REST APIs, PostgreSQL, Redis. 3+ years experience.",
-            "apply_url": "https://wuzzuf.net", "source": "demo",
-            "salary_min": 28000, "salary_max": 45000, "remote": False,
-            "posted_at": datetime.utcnow().isoformat(), "country": "eg",
-        },
-        {
-            "external_id": "demo_002", "title": "Senior Frontend Developer",
-            "company": "Breadfast", "location": "Cairo, Egypt",
-            "description": "React, TypeScript, GraphQL. Lead a team of 3. Design system, performance, A/B testing experience needed.",
-            "apply_url": "https://wuzzuf.net", "source": "demo",
-            "salary_min": 35000, "salary_max": 55000, "remote": True,
-            "posted_at": datetime.utcnow().isoformat(), "country": "eg",
-        },
-        {
-            "external_id": "demo_003", "title": "Data Analyst",
-            "company": "Paymob", "location": "Cairo, Egypt",
-            "description": "SQL, Python, Tableau. Fintech analytics. Transaction fraud detection, KPI dashboards. 2+ years experience.",
-            "apply_url": "https://wuzzuf.net", "source": "demo",
-            "salary_min": 22000, "salary_max": 38000, "remote": False,
-            "posted_at": datetime.utcnow().isoformat(), "country": "eg",
-        },
-        {
-            "external_id": "demo_004", "title": "DevOps Engineer",
-            "company": "Instabug", "location": "Remote – Egypt",
-            "description": "AWS, Kubernetes, Terraform, CI/CD. Support 50M+ MAU infrastructure. Strong Linux skills required.",
-            "apply_url": "https://wuzzuf.net", "source": "demo",
-            "salary_min": 40000, "salary_max": 65000, "remote": True,
-            "posted_at": datetime.utcnow().isoformat(), "country": "eg",
-        },
-        {
-            "external_id": "demo_005", "title": "Product Manager – Growth",
-            "company": "Swvl", "location": "Cairo, Egypt",
-            "description": "Own growth metrics, A/B tests, user funnels. 2+ yrs PM exp. Data-driven mindset required.",
-            "apply_url": "https://wuzzuf.net", "source": "demo",
-            "salary_min": 32000, "salary_max": 50000, "remote": False,
-            "posted_at": datetime.utcnow().isoformat(), "country": "eg",
-        },
-        {
-            "external_id": "demo_006", "title": "Mobile Developer (Flutter)",
-            "company": "ElWazer", "location": "Cairo, Egypt",
-            "description": "Flutter, Dart, Firebase. Build cross-platform apps for fintech. 2+ yrs mobile experience.",
-            "apply_url": "https://wuzzuf.net", "source": "demo",
-            "salary_min": 25000, "salary_max": 40000, "remote": False,
-            "posted_at": datetime.utcnow().isoformat(), "country": "eg",
-        },
-        {
-            "external_id": "demo_007", "title": "UX/UI Designer",
-            "company": "Rabbit", "location": "Cairo, Egypt",
-            "description": "Figma, user research, prototyping. Design consumer-facing e-commerce mobile app. 3+ years portfolio required.",
-            "apply_url": "https://wuzzuf.net", "source": "demo",
-            "salary_min": 20000, "salary_max": 35000, "remote": False,
-            "posted_at": datetime.utcnow().isoformat(), "country": "eg",
-        },
-        {
-            "external_id": "demo_008", "title": "Finance Manager",
-            "company": "MNT-Halan", "location": "Cairo, Egypt",
-            "description": "CPA/CMA preferred. Financial reporting, budgeting, P&L management. 5+ years in fintech or banking.",
-            "apply_url": "https://wuzzuf.net", "source": "demo",
-            "salary_min": 45000, "salary_max": 70000, "remote": False,
-            "posted_at": datetime.utcnow().isoformat(), "country": "eg",
-        },
-        {
-            "external_id": "demo_009", "title": "Marketing Manager – Digital",
-            "company": "Wasla", "location": "Cairo, Egypt",
-            "description": "SEO, paid media, email marketing, analytics. Lead 4-person team. B2C experience in Egypt market.",
-            "apply_url": "https://wuzzuf.net", "source": "demo",
-            "salary_min": 25000, "salary_max": 42000, "remote": False,
-            "posted_at": datetime.utcnow().isoformat(), "country": "eg",
-        },
-        {
-            "external_id": "demo_010", "title": "QA Engineer",
-            "company": "Yodawy", "location": "Remote – Egypt",
-            "description": "Selenium, Cypress, Postman. Automated + manual testing. Healthtech startup. Agile/Scrum environment.",
-            "apply_url": "https://wuzzuf.net", "source": "demo",
-            "salary_min": 18000, "salary_max": 30000, "remote": True,
-            "posted_at": datetime.utcnow().isoformat(), "country": "eg",
-        },
+        {"external_id": "demo_001", "title": "Software Engineer – Backend", "company": "Vodafone Egypt",
+         "location": "Cairo, Egypt", "description": "Python, Go, microservices, PostgreSQL, Redis. 3+ yrs exp.",
+         "apply_url": "https://wuzzuf.net", "source": "demo", "salary_min": 28000, "salary_max": 45000,
+         "remote": False, "posted_at": datetime.utcnow().isoformat(), "country": "eg"},
+        {"external_id": "demo_002", "title": "Senior Frontend Developer", "company": "Breadfast",
+         "location": "Remote – Egypt", "description": "React, TypeScript, GraphQL. Remote-first team.",
+         "apply_url": "https://wuzzuf.net", "source": "demo", "salary_min": 35000, "salary_max": 55000,
+         "remote": True, "posted_at": datetime.utcnow().isoformat(), "country": "eg"},
+        {"external_id": "demo_003", "title": "Data Analyst", "company": "Paymob",
+         "location": "Cairo, Egypt", "description": "SQL, Python, Tableau. Fintech analytics.",
+         "apply_url": "https://wuzzuf.net", "source": "demo", "salary_min": 22000, "salary_max": 38000,
+         "remote": False, "posted_at": datetime.utcnow().isoformat(), "country": "eg"},
+        {"external_id": "demo_004", "title": "DevOps Engineer", "company": "Instabug",
+         "location": "Remote – Egypt", "description": "AWS, Kubernetes, Terraform, CI/CD.",
+         "apply_url": "https://wuzzuf.net", "source": "demo", "salary_min": 40000, "salary_max": 65000,
+         "remote": True, "posted_at": datetime.utcnow().isoformat(), "country": "eg"},
+        {"external_id": "demo_005", "title": "ML Engineer", "company": "Rology",
+         "location": "Cairo, Egypt", "description": "PyTorch, TensorFlow, MLOps. Medical AI startup.",
+         "apply_url": "https://wuzzuf.net", "source": "demo", "salary_min": 35000, "salary_max": 60000,
+         "remote": False, "posted_at": datetime.utcnow().isoformat(), "country": "eg"},
     ]
