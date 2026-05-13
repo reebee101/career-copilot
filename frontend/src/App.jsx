@@ -541,10 +541,12 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
           if(region==='egypt'){
             const loc=(job.location||'').toLowerCase()
             const ctr=(job.country||'').toLowerCase()
-            const EG_LOC=['egypt','cairo','cair','alexandria','alex','giza','eg','egy']
-            const EG_CTR=['eg','egy','egypt']
-            const isEgyptLoc=EG_LOC.some(x=>loc.includes(x))
-            const isEgyptCtr=EG_CTR.includes(ctr)||EG_CTR.some(x=>ctr.includes(x))
+            // Tokenize so 'EG' matches as a word, not inside 'engineer' or 'manager'
+            const locTokens=new Set(loc.split(/[\s,./|-]+/).filter(Boolean))
+            const ctrTokens=new Set(ctr.split(/[\s,./|-]+/).filter(Boolean))
+            const EG_WORDS=new Set(['egypt','cairo','cair','alexandria','alex','giza','eg','egy'])
+            const isEgyptLoc=[...locTokens].some(t=>EG_WORDS.has(t))
+            const isEgyptCtr=[...ctrTokens].some(t=>EG_WORDS.has(t))
             const isEgyptSource=job.source==='wuzzuf'
             const isRemoteAnywhere=job.remote&&(loc.includes('worldwide')||loc.includes('anywhere')||loc.includes('remote')||loc===''||job.source==='remotive'||job.source==='arbeitnow')
             return isEgyptLoc||isEgyptCtr||isEgyptSource||isRemoteAnywhere

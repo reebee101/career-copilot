@@ -1,3 +1,4 @@
+import re
 from fastapi import APIRouter, Depends, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, delete
@@ -73,8 +74,10 @@ async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
 
 def _serialize(j: JobPosting) -> dict:
     loc = (j.location or "").lower()
-    ctr = (j.external_id or "").lower()  # external_id has country hint for jsearch
-    is_egypt = any(x in loc for x in ["egypt", "cairo", "cair", "alexandria", "alex", "giza", "eg,", "egy"])
+    # Split location into tokens so "EG" matches exactly, not inside words like "engineer"
+    loc_tokens = set(re.split(r'[\s,./|-]+', loc))
+    EG_TOKENS = {"egypt", "cairo", "cair", "alexandria", "alex", "giza", "eg", "egy"}
+    is_egypt = bool(loc_tokens & EG_TOKENS)
     return {
         "id": j.id,
         "external_id": j.external_id,
