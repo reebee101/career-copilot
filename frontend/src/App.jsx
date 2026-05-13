@@ -540,11 +540,14 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
         .filter(job=>{
           if(region==='egypt'){
             const loc=(job.location||'').toLowerCase()
-            const isEgypt=loc.includes('egypt')||loc.includes('cairo')||loc.includes('alexandria')||loc.includes('giza')
-            const isEgyptSource=job.source==='wuzzuf'||job.source==='demo'
-            // Include: Egypt-located, Egypt-source, remote worldwide (Egyptians can apply), MENA remote
+            const ctr=(job.country||'').toLowerCase()
+            const EG_LOC=['egypt','cairo','cair','alexandria','alex','giza','eg','egy']
+            const EG_CTR=['eg','egy','egypt']
+            const isEgyptLoc=EG_LOC.some(x=>loc.includes(x))
+            const isEgyptCtr=EG_CTR.includes(ctr)||EG_CTR.some(x=>ctr.includes(x))
+            const isEgyptSource=job.source==='wuzzuf'
             const isRemoteAnywhere=job.remote&&(loc.includes('worldwide')||loc.includes('anywhere')||loc.includes('remote')||loc===''||job.source==='remotive'||job.source==='arbeitnow')
-            return isEgypt||isEgyptSource||isRemoteAnywhere
+            return isEgyptLoc||isEgyptCtr||isEgyptSource||isRemoteAnywhere
           }
           if(region==='remote') return job.remote
           return true

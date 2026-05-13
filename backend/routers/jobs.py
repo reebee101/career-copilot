@@ -73,7 +73,8 @@ async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
 
 def _serialize(j: JobPosting) -> dict:
     loc = (j.location or "").lower()
-    is_egypt = any(x in loc for x in ["egypt", "cairo", "alexandria", "giza"])
+    ctr = (j.external_id or "").lower()  # external_id has country hint for jsearch
+    is_egypt = any(x in loc for x in ["egypt", "cairo", "cair", "alexandria", "alex", "giza", "eg,", "egy"])
     return {
         "id": j.id,
         "external_id": j.external_id,
@@ -89,4 +90,5 @@ def _serialize(j: JobPosting) -> dict:
         "remote": j.remote,
         "posted_at": j.posted_at.isoformat() if j.posted_at else None,
         "country": "eg" if (is_egypt or j.source == "wuzzuf") else "remote" if j.remote else "",
+        # also expose raw source country for frontend filtering
     }

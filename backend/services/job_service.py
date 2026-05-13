@@ -355,7 +355,7 @@ async def search_jobs_jsearch(cv_skills: list[str] = None) -> list[dict]:
                     is_remote = job.get("job_is_remote", False)
                     is_egypt = (
                         country in ("EG", "EGY", "EGYPT") or
-                        any(x in full_location for x in ["egypt", "cairo", "alexandria", "giza", "eg"])
+                        any(x in full_location for x in ["egypt", "cairo", "cair", "alexandria", "alex", "giza", " eg ", "egy"])
                     )
 
                     if not is_egypt and not is_remote:
@@ -386,7 +386,7 @@ async def search_jobs_jsearch(cv_skills: list[str] = None) -> list[dict]:
                         "salary_max": salary_max,
                         "remote": is_remote,
                         "posted_at": job.get("job_posted_at_datetime_utc", datetime.utcnow().isoformat()),
-                        "country": "eg" if is_egypt else "remote",
+                        "country": "eg" if is_egypt else ("remote" if is_remote else ""),
                         "logo": job.get("employer_logo"),
                     })
 
