@@ -2,7 +2,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
 from models.database import AsyncSessionLocal, JobPosting
-from services.job_service import search_jobs_adzuna, search_jobs_serpapi, search_jobs_wuzzuf, search_jobs_linkedin, _demo_jobs
+from services.job_service import (
+    search_jobs_jsearch, search_jobs_remotive, search_jobs_arbeitnow,
+    search_jobs_wuzzuf, search_jobs_adzuna, search_jobs_serpapi, _demo_jobs
+)
 from config import get_settings
 from datetime import datetime
 
@@ -11,69 +14,69 @@ scheduler = AsyncIOScheduler()
 
 
 async def fetch_and_store_jobs(cv_skills: list[str] = None):
-    """Fetch from Wuzzuf, LinkedIn, Adzuna, SerpAPI and store in DB.
-    cv_skills: list of skills from the user's CV — used to search for relevant jobs in ANY field.
-    """
-    print(f"[Scheduler] Fetching jobs at {datetime.utcnow().isoformat()} | skills={cv_skills}")
-
+    print(f"[Scheduler] Fetching jobs | skills={cv_skills}")
     jobs = []
 
-    # Egypt: Wuzzuf + LinkedIn — search using actual CV skills so results match any field
-    wuzzuf_jobs = await search_jobs_wuzzuf(cv_skills)
-    jobs.extend(wuzzuf_jobs)
-    print(f"[Scheduler] Wuzzuf: {len(wuzzuf_jobs)} jobs")
+    # PRIMARY: JSearch — real jobs from Indeed, LinkedIn, Glassdoor + big Egypt companies
+    if settings.jsearch_api_key:
+        jsearch = await search_jobs_jsearch(cv_skills)
+        jobs.extend(jsearch)
+        print(f"[Scheduler] JSearch: {len(jsearch)} jobs")
 
-    linkedin_jobs = await search_jobs_linkedin(cv_skills)
-    jobs.extend(linkedin_jobs)
-    print(f"[Scheduler] LinkedIn: {len(linkedin_jobs)} jobs")
+    # SECONDARY: Free APIs — always run, no key needed
+    remotive = await search_jobs_remotive(cv_skills)
+    jobs.extend(remotive)
 
-    # International: Adzuna (if key set) — use CV skills as search keywords
+    arbeitnow = await search_jobs_arbeitnow(cv_skills)
+    jobs.extend(arbeitnow)
+
+    # BEST-EFFORT: Wuzzuf scraping
+    wuzzuf = await search_jobs_wuzzuf(cv_skills)
+    jobs.extend(wuzzuf)
+
+    # OPTIONAL: Adzuna for UK/US/UAE
     if settings.adzuna_app_id and settings.adzuna_api_key:
-        adzuna_jobs = await search_jobs_adzuna(
-            keywords=cv_skills or ["software engineer", "developer"],
+        adzuna = await search_jobs_adzuna(
+            keywords=cv_skills or ["software engineer"],
             countries=[c for c in settings.job_search_countries if c != "eg"],
         )
-        jobs.extend(adzuna_jobs)
-        print(f"[Scheduler] Adzuna: {len(adzuna_jobs)} jobs")
+        jobs.extend(adzuna)
 
-    # SerpAPI (if key set)
+    # OPTIONAL: SerpAPI
     if settings.serpapi_key:
         for kw in (cv_skills or ["software engineer"])[:2]:
-            serp = await search_jobs_serpapi(f"{kw} Egypt")
-            jobs.extend(serp)
+            jobs.extend(await search_jobs_serpapi(f"{kw} Egypt"))
 
-    # Fallback to diverse demo jobs if completely empty
+    # FALLBACK: demo jobs if everything failed
     if not jobs:
         jobs = _demo_jobs()
-        print("[Scheduler] No real jobs fetched, using demo data")
+        print("[Scheduler] All sources failed — using demo data")
 
     new_count = 0
     async with AsyncSessionLocal() as db:
-        for job_data in jobs:
+        for d in jobs:
             existing = await db.execute(
-                select(JobPosting).where(JobPosting.external_id == job_data["external_id"])
+                select(JobPosting).where(JobPosting.external_id == d["external_id"])
             )
             if existing.scalar_one_or_none():
                 continue
-
             db.add(JobPosting(
-                external_id=job_data["external_id"],
-                title=job_data["title"],
-                company=job_data["company"],
-                location=job_data["location"],
-                description=job_data["description"],
-                apply_url=job_data["apply_url"],
-                source=job_data["source"],
-                salary_min=job_data.get("salary_min"),
-                salary_max=job_data.get("salary_max"),
-                remote=job_data.get("remote", False),
+                external_id=d["external_id"],
+                title=d["title"],
+                company=d["company"],
+                location=d["location"],
+                description=d["description"],
+                apply_url=d["apply_url"],
+                source=d["source"],
+                salary_min=d.get("salary_min"),
+                salary_max=d.get("salary_max"),
+                remote=d.get("remote", False),
                 posted_at=datetime.utcnow(),
             ))
             new_count += 1
-
         await db.commit()
 
-    print(f"[Scheduler] Stored {new_count} new jobs")
+    print(f"[Scheduler] Done — {new_count} new jobs stored ({len(jobs)} fetched)")
     return new_count
 
 
@@ -81,7 +84,7 @@ def start_scheduler():
     scheduler.add_job(fetch_and_store_jobs, trigger=IntervalTrigger(hours=6),
                       id="fetch_jobs", replace_existing=True)
     scheduler.start()
-    print("[Scheduler] Started — fetching jobs every 6 hours")
+    print("[Scheduler] Started — fetching every 6 hours")
 
 
 def stop_scheduler():

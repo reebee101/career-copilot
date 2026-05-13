@@ -539,11 +539,12 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
         .map(job=>({...job,match_score:scoreJob(job,skills)}))
         .filter(job=>{
           if(region==='egypt'){
-            return job.location?.toLowerCase().includes('egypt')||
-              job.location?.toLowerCase().includes('cairo')||
-              job.location?.toLowerCase().includes('alexandria')||
-              job.country==='eg'||job.source==='wuzzuf'||
-              job.source==='linkedin'||job.source==='demo'
+            const loc=(job.location||'').toLowerCase()
+            const isEgypt=loc.includes('egypt')||loc.includes('cairo')||loc.includes('alexandria')||loc.includes('giza')
+            const isEgyptSource=job.source==='wuzzuf'||job.source==='demo'
+            // Include: Egypt-located, Egypt-source, remote worldwide (Egyptians can apply), MENA remote
+            const isRemoteAnywhere=job.remote&&(loc.includes('worldwide')||loc.includes('anywhere')||loc.includes('remote')||loc===''||job.source==='remotive'||job.source==='arbeitnow')
+            return isEgypt||isEgyptSource||isRemoteAnywhere
           }
           if(region==='remote') return job.remote
           return true
@@ -565,7 +566,7 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
     setRefreshing(false)
   }
 
-  const srcColor={wuzzuf:'badge-amber',linkedin:'badge-purple',adzuna:'badge-green',google_jobs:'badge-green',demo:'badge-gray'}
+  const srcColor={wuzzuf:'badge-amber',linkedin:'badge-purple',adzuna:'badge-green',google_jobs:'badge-green',remotive:'badge-green',arbeitnow:'badge-purple',indeed:'badge-amber',linkedin:'badge-purple',glassdoor:'badge-green',jsearch:'badge-green',demo:'badge-gray'}
   const matchColor=s=>s>=85?'var(--accent)':s>=75?'var(--amber)':'var(--coral)'
 
   return (
