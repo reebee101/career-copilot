@@ -227,7 +227,7 @@ def _normalize_adzuna(job, country):
 
 # ── SerpAPI ────────────────────────────────────────────────────
 
-async def search_jobs_serpapi(keyword="software engineer Egypt"):
+async def search_jobs_serpapi(keyword="software engineer Cairo Egypt EG"):
     if not settings.serpapi_key:
         return []
     async with httpx.AsyncClient(timeout=15.0) as client:
@@ -315,9 +315,13 @@ async def search_jobs_jsearch(cv_skills: list[str] = None) -> list[dict]:
     seen = set()
     keywords = cv_skills[:3] if cv_skills else ["software engineer", "data analyst", "developer"]
 
-    # Queries: skill-based Egypt search + big company career pages
-    queries = [f"{kw} in Egypt" for kw in keywords[:3]]
-    queries += [f"{company} jobs Egypt" for company in JSEARCH_COMPANIES_EGYPT[:4]]
+    # Search using multiple Egypt identifiers to maximize results
+    egypt_terms = ["Egypt", "Cairo", "EG", "Alexandria"]
+    queries = []
+    for kw in keywords[:2]:
+        for term in egypt_terms[:2]:  # 2 skills × 2 terms = 4 queries
+            queries.append(f"{kw} {term}")
+    queries += [f"{company}" for company in JSEARCH_COMPANIES_EGYPT[:4]]
 
     async with httpx.AsyncClient(timeout=20.0, headers=headers) as client:
         for query in queries[:6]:  # stay within free tier
@@ -346,8 +350,13 @@ async def search_jobs_jsearch(cv_skills: list[str] = None) -> list[dict]:
                     # Filter: only Egypt or remote
                     country = (job.get("job_country") or "").upper()
                     city = (job.get("job_city") or "").lower()
+                    state = (job.get("job_state") or "").lower()
+                    full_location = f"{city} {state} {country}".lower()
                     is_remote = job.get("job_is_remote", False)
-                    is_egypt = country == "EG" or "egypt" in city or "cairo" in city or "alexandria" in city
+                    is_egypt = (
+                        country in ("EG", "EGY", "EGYPT") or
+                        any(x in full_location for x in ["egypt", "cairo", "alexandria", "giza", "eg"])
+                    )
 
                     if not is_egypt and not is_remote:
                         continue

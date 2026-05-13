@@ -45,7 +45,7 @@ async def fetch_and_store_jobs(cv_skills: list[str] = None):
     # OPTIONAL: SerpAPI
     if settings.serpapi_key:
         for kw in (cv_skills or ["software engineer"])[:2]:
-            jobs.extend(await search_jobs_serpapi(f"{kw} Egypt"))
+            jobs.extend(await search_jobs_serpapi(f"{kw} Cairo Egypt EG"))
 
     new_count = 0
     async with AsyncSessionLocal() as db:
