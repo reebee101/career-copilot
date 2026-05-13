@@ -48,16 +48,28 @@ phone (string, or empty)
 summary (string, 2 sentences based on the actual CV content)
 ats_score (integer 0-100, based on keyword density, formatting clarity, measurable achievements, section structure)
 score_breakdown (object): { "keywords": int, "formatting": int, "experience": int, "education": int, "skills": int } — all 0-100
-skills (array of strings, extracted from CV)
+skills (array of strings, ALL skills extracted from CV — be thorough, include languages, frameworks, tools, soft skills)
 experience_years (integer)
 education (string)
-strengths (array of exactly 3 strings, specific to this person's actual CV — not generic)
-critical_gaps (array of exactly 4 objects): each object MUST have { "skill": string, "severity": "critical"|"moderate"|"minor", "reason": string explaining why this gap hurts job prospects }
-rewritten_bullets (array of 5 objects): each MUST have { "original": string (exact bullet from CV), "rewritten": string (action verb + specific metric + business impact), "improvement": string (one sentence what changed) }
-recommended_certs (array of 3 objects): each has { "priority": 1|2|3, "name": string, "provider": string, "reason": string tailored to this person's gaps, "score_impact": string like "+8 ATS points" }
-recommended_projects (array of 3 objects): each has { "title": string, "difficulty": "beginner"|"intermediate"|"advanced", "description": string 2 sentences, "skills_added": array of strings }
-
-IMPORTANT: critical_gaps MUST always have exactly 4 items. Even strong CVs have gaps. Be specific and honest."""
+strengths (array of exactly 3 strings, specific to this person's actual CV content — NOT generic)
+critical_gaps (array of EXACTLY 4 objects): EVERY object MUST have these exact keys:
+  { "skill": "string — name of the missing skill or gap",
+    "severity": "critical" | "moderate" | "minor",
+    "reason": "string — 1 sentence explaining why this gap hurts job prospects" }
+  IMPORTANT: critical_gaps MUST always return exactly 4 objects. Even excellent CVs have gaps.
+  DO NOT return strings, only objects. DO NOT omit any of the three keys.
+rewritten_bullets (array of 5 objects): each MUST have:
+  { "original": "exact bullet text from CV",
+    "rewritten": "improved bullet: strong action verb + specific number/metric + business impact",
+    "improvement": "one sentence explaining what changed" }
+recommended_certs (array of 3 objects): each has:
+  { "priority": 1|2|3, "name": string, "provider": string,
+    "reason": "tailored to this person's specific skill gaps",
+    "score_impact": string like "+8 ATS points" }
+recommended_projects (array of 3 objects): each has:
+  { "title": string, "difficulty": "beginner"|"intermediate"|"advanced",
+    "description": "2 sentences on what to build and why",
+    "skills_added": [array of strings] }"""
 
     return _chat_json([
         {"role": "system", "content": system},
@@ -75,11 +87,10 @@ application_strategy (string, 2-3 sentences of specific advice for THIS candidat
 matched_keywords (array of strings)
 missing_keywords (array of strings)
 tailored_bullets (array of 3 strings, CV bullets rewritten specifically for this JD)
-rewritten_cv_sections (object): {
-  "summary": string (rewritten professional summary targeting this exact role),
-  "skills_to_highlight": array of strings (from their CV that match this JD),
-  "skills_to_add": array of strings (they should learn/add before applying)
-}
+rewritten_cv_sections (object):
+  { "summary": "rewritten professional summary targeting this exact role",
+    "skills_to_highlight": [array of strings from their CV that match this JD],
+    "skills_to_add": [array of strings they should learn before applying] }
 recommendation (string, 2-3 concrete actionable sentences)"""
 
     return _chat_json([
@@ -113,3 +124,18 @@ Base questions specifically on the candidate's actual CV projects and skills."""
         {"role": "user", "content": f"Generate interview questions based on:\n\n{cv_text[:2500]}"},
     ], max_tokens=1500)
     return data.get("questions", []) if isinstance(data, dict) else data
+
+
+async def evaluate_practice_answer(cv_text: str, question: str, user_answer: str, role: str) -> dict:
+    system = """You are a strict but fair interview coach. Evaluate the candidate's answer.
+Return a JSON object with EXACTLY:
+score (integer 1-10)
+verdict (string, one of: "Excellent", "Good", "Needs Work", "Too Vague")
+what_worked (array of 2-3 strings)
+what_to_improve (array of 2-3 strings)
+ideal_answer_outline (string, 2-3 sentences describing what a 10/10 answer looks like)"""
+
+    return _chat_json([
+        {"role": "system", "content": system},
+        {"role": "user", "content": f"Role: {role}\nQuestion: {question}\nCandidate's answer: {user_answer}\n\nCV context:\n{cv_text[:1500]}"},
+    ], max_tokens=800)

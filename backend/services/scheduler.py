@@ -11,12 +11,14 @@ scheduler = AsyncIOScheduler()
 
 
 async def fetch_and_store_jobs(cv_skills: list[str] = None):
-    """Fetch from Wuzzuf, LinkedIn, Adzuna, SerpAPI and store in DB."""
-    print(f"[Scheduler] Fetching jobs at {datetime.utcnow().isoformat()}")
+    """Fetch from Wuzzuf, LinkedIn, Adzuna, SerpAPI and store in DB.
+    cv_skills: list of skills from the user's CV — used to search for relevant jobs in ANY field.
+    """
+    print(f"[Scheduler] Fetching jobs at {datetime.utcnow().isoformat()} | skills={cv_skills}")
 
     jobs = []
 
-    # Egypt: Wuzzuf + LinkedIn (always, no API key needed)
+    # Egypt: Wuzzuf + LinkedIn — search using actual CV skills so results match any field
     wuzzuf_jobs = await search_jobs_wuzzuf(cv_skills)
     jobs.extend(wuzzuf_jobs)
     print(f"[Scheduler] Wuzzuf: {len(wuzzuf_jobs)} jobs")
@@ -25,10 +27,10 @@ async def fetch_and_store_jobs(cv_skills: list[str] = None):
     jobs.extend(linkedin_jobs)
     print(f"[Scheduler] LinkedIn: {len(linkedin_jobs)} jobs")
 
-    # International: Adzuna (if key set)
+    # International: Adzuna (if key set) — use CV skills as search keywords
     if settings.adzuna_app_id and settings.adzuna_api_key:
         adzuna_jobs = await search_jobs_adzuna(
-            keywords=cv_skills or settings.job_search_keywords,
+            keywords=cv_skills or ["software engineer", "developer"],
             countries=[c for c in settings.job_search_countries if c != "eg"],
         )
         jobs.extend(adzuna_jobs)
@@ -36,11 +38,11 @@ async def fetch_and_store_jobs(cv_skills: list[str] = None):
 
     # SerpAPI (if key set)
     if settings.serpapi_key:
-        for kw in (cv_skills or settings.job_search_keywords)[:2]:
+        for kw in (cv_skills or ["software engineer"])[:2]:
             serp = await search_jobs_serpapi(f"{kw} Egypt")
             jobs.extend(serp)
 
-    # Fallback to demo if completely empty
+    # Fallback to diverse demo jobs if completely empty
     if not jobs:
         jobs = _demo_jobs()
         print("[Scheduler] No real jobs fetched, using demo data")
