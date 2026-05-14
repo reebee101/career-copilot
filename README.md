@@ -119,36 +119,6 @@ Auto-apply uses Playwright to fill application forms. It's designed to be **surg
 
 ---
 
-## 📡 API Docs
-
-After starting: **http://localhost:8000/docs** (Swagger UI)
-
-Key endpoints:
-```
-POST /api/cv/upload              — Upload CV file
-POST /api/cv/score-against-jd   — Score CV vs job description
-POST /api/cv/cover-letter        — Generate cover letter
-GET  /api/jobs/                  — List all fetched jobs
-GET  /api/jobs/refresh           — Trigger manual job fetch
-POST /api/applications/          — Create application (auto-scores + cover letter)
-POST /api/applications/auto-apply — Trigger Playwright auto-apply
-PATCH /api/applications/{id}/status — Update status
-POST /api/interview/practice-feedback — AI feedback on practice answers
-```
-
----
-
-## 🌐 Deployment
-
-### Free: Railway.app
-```bash
-# Install Railway CLI
-npm install -g @railway/cli
-railway login
-railway init
-railway up
-```
-Set env vars in Railway dashboard.
 
 ### Docker
 ```dockerfile
@@ -164,25 +134,3 @@ CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ### Render.com
 - Build command: `pip install -r backend/requirements.txt && cd frontend && npm install && npm run build`
 - Start command: `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
-
----
-
-## 🔧 Extending
-
-**Add a new job source:** Add a function in `services/job_service.py` returning normalized job dicts, call it in `fetch_and_store_jobs()`.
-
-**Support a new ATS:** Add a handler in `services/apply_service.py`, update `detect_ats()`.
-
-**Swap SQLite for Postgres:** Change `DATABASE_URL` in `.env`:
-```
-DATABASE_URL=postgresql+asyncpg://user:pass@host/db
-```
-
----
-
-## 📋 Roadmap
-- [ ] LinkedIn cookie-based auth for Easy Apply
-- [ ] Email notifications for new matching jobs
-- [ ] Multi-CV support (different CVs for different roles)
-- [ ] Salary benchmarking per role/country
-- [ ] Chrome extension for 1-click job saving
