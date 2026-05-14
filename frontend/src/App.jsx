@@ -43,14 +43,17 @@ function saveUsers(u) { localStorage.setItem(AUTH_KEY, JSON.stringify(u)) }
 // ── AUTH SCREEN ───────────────────────────────────────────────
 function AuthScreen({ onAuth }) {
   const [mode, setMode] = useState('signup')
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPass, setShowPass] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   const submit = async () => {
     setError('')
-    if (!email.trim() || !password.trim()) { setError('Please fill in both fields.'); return }
+    if (mode === 'signup' && !name.trim()) { setError('Please enter your name.'); return }
+    if (!email.trim() || !password.trim()) { setError('Please fill in all fields.'); return }
     if (!/\S+@\S+\.\S+/.test(email)) { setError('Enter a valid email address.'); return }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return }
     setLoading(true)
@@ -58,7 +61,7 @@ function AuthScreen({ onAuth }) {
     await new Promise(r => setTimeout(r, 350))
     if (mode === 'signup') {
       if (users[email]) { setError('Email already registered.'); setLoading(false); return }
-      users[email] = { password, profiles: [], cvHistory: [], applications: [] }
+      users[email] = { name: name.trim(), password, profiles: [], cvHistory: [], applications: [] }
       saveUsers(users)
       onAuth({ email, userData: users[email] })
     } else {
@@ -94,13 +97,37 @@ function AuthScreen({ onAuth }) {
           </div>
 
           <div style={{ display:'flex',flexDirection:'column',gap:10 }}>
+            {mode === 'signup' && (
+              <div style={{ position:'relative' }}>
+                <User size={14} style={{ position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:'var(--text-tertiary)',pointerEvents:'none' }} />
+                <input placeholder="Your name" type="text" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} style={{ paddingLeft:36 }} />
+              </div>
+            )}
             <div style={{ position:'relative' }}>
-              <User size={14} style={{ position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:'var(--text-tertiary)' }} />
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:'var(--text-tertiary)',pointerEvents:'none' }}><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
               <input placeholder="Email address" type="email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} style={{ paddingLeft:36 }} />
             </div>
             <div style={{ position:'relative' }}>
-              <Lock size={14} style={{ position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:'var(--text-tertiary)' }} />
-              <input placeholder="Password (min 6 chars)" type="password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} style={{ paddingLeft:36 }} />
+              <Lock size={14} style={{ position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:'var(--text-tertiary)',pointerEvents:'none' }} />
+              <input
+                placeholder={mode==='signup'?'Password (min 6 chars)':'Password'}
+                type={showPass?'text':'password'}
+                value={password}
+                onChange={e=>setPassword(e.target.value)}
+                onKeyDown={e=>e.key==='Enter'&&submit()}
+                style={{ paddingLeft:36, paddingRight:40 }}
+              />
+              <button
+                type="button"
+                onClick={()=>setShowPass(p=>!p)}
+                style={{ position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--text-tertiary)',padding:2,display:'flex',alignItems:'center' }}
+                tabIndex={-1}
+              >
+                {showPass
+                  ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                }
+              </button>
             </div>
           </div>
 
@@ -506,14 +533,46 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
   const [selected,setSelected]=useState(null)
   const [region,setRegion]=useState('egypt')
 
-  const scoreJob=useCallback((job,skills)=>{
-    if(!skills||skills.length===0) return Math.floor(Math.random()*20)+60
-    const jdText=`${job.title} ${job.description} ${job.company}`.toLowerCase()
-    const matched=skills.filter(s=>jdText.includes(s.toLowerCase()))
-    const skillScore=(matched.length/Math.max(skills.length,1))*40
-    const titleWords=job.title.toLowerCase().split(/\s+/)
-    const titleBonus=skills.some(s=>titleWords.some(w=>w.includes(s.toLowerCase())||s.toLowerCase().includes(w)))?20:0
-    return Math.min(99,Math.round(45+skillScore+titleBonus))
+  const scoreJob=useCallback((job,skills,profileSummary)=>{
+    if(!skills||skills.length===0) return 0
+    const title=(job.title||'').toLowerCase()
+    const desc=(job.description_full||job.description||'').toLowerCase()
+
+    // 1. Skill match — title hit worth 3x desc hit
+    let skillPoints=0, matchedSkills=0
+    skills.forEach(s=>{
+      const sl=s.toLowerCase().trim()
+      if(!sl||sl.length<2) return
+      const inTitle=title.includes(sl)
+      const inDesc=desc.includes(sl)
+      if(inTitle){ skillPoints+=3; matchedSkills++ }
+      else if(inDesc){ skillPoints+=1; matchedSkills++ }
+    })
+    const skillRatio=matchedSkills/Math.max(skills.length,1)
+    const skillScore=Math.min(55, Math.round(skillRatio*55 + Math.min(skillPoints,20)))
+
+    // 2. Title relevance vs CV summary
+    const summaryWords=(profileSummary||'').toLowerCase().split(/\W+/).filter(w=>w.length>3)
+    const titleWords=title.split(/\W+/).filter(w=>w.length>3)
+    const titleOverlap=titleWords.filter(w=>summaryWords.some(sw=>sw.includes(w)||w.includes(sw))).length
+    const titleScore=Math.min(25, titleOverlap*8)
+
+    // 3. Seniority alignment
+    const seniorWords=['senior','lead','principal','director','head','chief','vp','manager']
+    const juniorWords=['junior','graduate','entry','intern','trainee','associate']
+    const cvSenior=summaryWords.some(w=>seniorWords.includes(w))
+    const cvJunior=summaryWords.some(w=>juniorWords.includes(w))
+    const jobSenior=seniorWords.some(w=>title.includes(w))
+    const jobJunior=juniorWords.some(w=>title.includes(w))
+    let seniorityPenalty=0
+    if(cvSenior&&jobJunior) seniorityPenalty=15
+    if(cvJunior&&jobSenior) seniorityPenalty=10
+
+    // 4. Recency bonus
+    const posted=job.posted_at?new Date(job.posted_at):null
+    const ageBonus=posted&&(Date.now()-posted.getTime())<14*24*3600*1000?5:0
+
+    return Math.max(10, Math.min(99, Math.round(skillScore+titleScore+ageBonus-seniorityPenalty)))
   },[])
 
   const load=useCallback(async()=>{
@@ -523,27 +582,23 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
       const country=region==='egypt'?'egypt':null
       const rawJobs=await api.fetchJobs(remoteOnly,country)
       const skills=profile?.analysis?.skills||[]
+      const summary=profile?.analysis?.summary||''
       const scored=rawJobs
-        .map(job=>({...job,match_score:scoreJob(job,skills)}))
+        .map(job=>({...job,match_score:scoreJob(job,skills,summary)}))
         .filter(job=>{
+          // Egypt tab: trust the backend — it already filtered by country/location/wuzzuf
+          // Still do a light client-side check as safety net
           if(region==='egypt'){
-            // Loosened: accept Egypt-tagged jobs, Wuzzuf source, or remote jobs
-            const loc=(job.location||'').toLowerCase()
             const ctr=(job.country||'').toLowerCase()
             const src=(job.source||'').toLowerCase()
-            const EG_TERMS=['egypt','cairo','alexandria','giza','alex','hurghada','luxor','mansoura','tanta']
-            const isEgyptLoc=EG_TERMS.some(t=>loc.includes(t))
-            const isEgyptCtr=ctr==='eg'||ctr==='egy'||ctr==='egypt'
-            const isWuzzuf=src==='wuzzuf'
-            // Also include remote jobs that welcome Egyptian applicants
-            const isRemoteFriendly=job.remote&&!loc.includes('us only')&&!loc.includes('eu only')&&!loc.includes('uk only')&&!loc.includes('us only')
-            return isEgyptLoc||isEgyptCtr||isWuzzuf||isRemoteFriendly
+            const loc=(job.location||'').toLowerCase()
+            const EG=['egypt','cairo','alexandria','giza','alex','hurghada','luxor','mansoura','tanta','eg']
+            return src==='wuzzuf'||ctr==='eg'||ctr==='egy'||EG.some(t=>loc.includes(t))||job.remote
           }
           if(region==='remote') return job.remote===true
-          // Worldwide: show everything
-          return true
+          return true // worldwide — show all
         })
-        .filter(job=>job.match_score>=45)
+        .filter(job=>job.match_score>=20) // lower threshold — let relevance sort do the work
         .sort((a,b)=>b.match_score-a.match_score)
       setJobs(scored)
     } catch(e){ console.error(e) }
@@ -1024,7 +1079,8 @@ export default function App() {
           </div>
           {/* User card */}
           <div style={{ padding:'8px 10px',background:'var(--surface-pink)',borderRadius:'var(--radius-sm)',border:'1px solid var(--border)' }}>
-            <div style={{ fontWeight:600,fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'var(--text)' }}>{authUser.email}</div>
+            <div style={{ fontWeight:600,fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'var(--text)' }}>{authUser.userData?.name||authUser.email}</div>
+            <div style={{ fontSize:10,color:'var(--text-tertiary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{authUser.email}</div>
             <div style={{ fontSize:11,color:'var(--accent)',marginTop:2,fontWeight:500 }}>ATS: {profile.ats_score}/100 · v{cvHistory.length}</div>
             {cvHistory.length>1&&(
               <button className="btn btn-ghost btn-sm" style={{ marginTop:5,width:'100%',fontSize:10,padding:'2px 6px',borderRadius:20 }} onClick={()=>setShowCompare(true)}>

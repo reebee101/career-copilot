@@ -1,36 +1,63 @@
 import re
 from fastapi import APIRouter, Depends, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, delete
+from sqlalchemy import select, desc, delete, or_
 from models.database import get_db, JobPosting, AsyncSessionLocal
 from services.scheduler import fetch_and_store_jobs
 from datetime import datetime
 
 router = APIRouter()
 
+EG_TERMS = ["egypt", "cairo", "alexandria", "alex", "giza", "hurghada", "luxor", "mansoura", "tanta", "zamalek", "maadi", "heliopolis"]
+
+def _is_egypt_job(j: JobPosting) -> bool:
+    loc = (j.location or "").lower()
+    ctr = (j.country or "").lower()
+    src = (j.source or "").lower()
+    return (
+        src == "wuzzuf" or
+        ctr in ("eg", "egy", "egypt") or
+        any(t in loc for t in EG_TERMS)
+    )
 
 @router.get("/")
 async def list_jobs(
     db: AsyncSession = Depends(get_db),
     remote_only: bool = False,
     country: str = None,
-    limit: int = Query(100, le=200),
+    limit: int = Query(150, le=300),
     offset: int = 0,
 ):
-    # Always exclude demo jobs
+    # Base query — exclude demo jobs, newest first
     q = (select(JobPosting)
          .where(JobPosting.source != "demo")
          .order_by(desc(JobPosting.fetched_at))
          .limit(limit).offset(offset))
+
     if remote_only:
         q = q.where(JobPosting.remote == True)
-    if country:
-        q = q.where(JobPosting.location.ilike(f"%{country}%"))
+
+    if country and country.lower() in ("egypt", "eg"):
+        # Match Egypt by location text OR by country field OR by wuzzuf source
+        q = q.where(
+            or_(
+                JobPosting.source == "wuzzuf",
+                JobPosting.country.in_(["eg", "egy", "egypt"]),
+                *[JobPosting.location.ilike(f"%{t}%") for t in EG_TERMS]
+            )
+        )
+    elif country:
+        q = q.where(
+            or_(
+                JobPosting.country.ilike(f"%{country}%"),
+                JobPosting.location.ilike(f"%{country}%")
+            )
+        )
 
     result = await db.execute(q)
     jobs = result.scalars().all()
 
-    # DB empty or only demos — fetch real jobs now
+    # DB empty — fetch real jobs now
     if not jobs:
         await fetch_and_store_jobs()
         result = await db.execute(q)
@@ -41,7 +68,6 @@ async def list_jobs(
 
 @router.delete("/clear-demos")
 async def clear_demos():
-    """Remove all demo jobs from the database."""
     async with AsyncSessionLocal() as db:
         await db.execute(delete(JobPosting).where(JobPosting.source == "demo"))
         await db.commit()
@@ -73,11 +99,7 @@ async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
 
 
 def _serialize(j: JobPosting) -> dict:
-    loc = (j.location or "").lower()
-    # Split location into tokens so "EG" matches exactly, not inside words like "engineer"
-    loc_tokens = set(re.split(r'[\s,./|-]+', loc))
-    EG_TOKENS = {"egypt", "cairo", "cair", "alexandria", "alex", "giza", "eg", "egy"}
-    is_egypt = bool(loc_tokens & EG_TOKENS)
+    is_eg = _is_egypt_job(j)
     return {
         "id": j.id,
         "external_id": j.external_id,
@@ -92,6 +114,5 @@ def _serialize(j: JobPosting) -> dict:
         "salary_max": j.salary_max,
         "remote": j.remote,
         "posted_at": j.posted_at.isoformat() if j.posted_at else None,
-        "country": "eg" if (is_egypt or j.source == "wuzzuf") else "remote" if j.remote else "",
-        # also expose raw source country for frontend filtering
+        "country": "eg" if is_eg else ("remote" if j.remote else ""),
     }
