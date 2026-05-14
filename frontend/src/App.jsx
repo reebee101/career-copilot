@@ -585,9 +585,12 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
       const summary=profile?.analysis?.summary||''
       const scored=rawJobs
         .map(job=>({...job,match_score:scoreJob(job,skills,summary)}))
-        // No client-side location filtering — the backend already handles it per tab
-        // Only filter remote tab strictly; egypt and worldwide trust the backend
-        .filter(job=>region==='remote'?job.remote===true:true)
+        // Backend sets job.country = 'eg' | 'remote' | 'worldwide' — use it
+        .filter(job=>{
+          if(region==='egypt') return job.country==='eg'||job.remote===true
+          if(region==='remote') return job.remote===true
+          return true
+        })
         // Show everything — let match score do the ranking, don't hide low-match jobs
         .sort((a,b)=>b.match_score-a.match_score)
       setJobs(scored)

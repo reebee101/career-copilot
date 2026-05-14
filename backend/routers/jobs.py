@@ -1,4 +1,3 @@
-import re
 from fastapi import APIRouter, Depends, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, delete, or_
@@ -8,27 +7,16 @@ from datetime import datetime
 
 router = APIRouter()
 
-EG_TERMS = ["egypt", "cairo", "alexandria", "alex", "giza", "hurghada", "luxor", "mansoura", "tanta", "zamalek", "maadi", "heliopolis"]
-
-def _is_egypt_job(j: JobPosting) -> bool:
-    loc = (j.location or "").lower()
-    ctr = (j.country or "").lower()
-    src = (j.source or "").lower()
-    return (
-        src == "wuzzuf" or
-        ctr in ("eg", "egy", "egypt") or
-        any(t in loc for t in EG_TERMS)
-    )
+EG_TERMS = ["egypt", "cairo", "alexandria", "giza", "alex", "hurghada", "luxor", "mansoura", "tanta", "maadi", "zamalek"]
 
 @router.get("/")
 async def list_jobs(
     db: AsyncSession = Depends(get_db),
     remote_only: bool = False,
     country: str = None,
-    limit: int = Query(150, le=300),
+    limit: int = Query(200, le=500),
     offset: int = 0,
 ):
-    # Base query — exclude demo jobs, newest first
     q = (select(JobPosting)
          .where(JobPosting.source != "demo")
          .order_by(desc(JobPosting.fetched_at))
@@ -38,7 +26,6 @@ async def list_jobs(
         q = q.where(JobPosting.remote == True)
 
     if country and country.lower() in ("egypt", "eg"):
-        # Match Egypt by location text OR by country field OR by wuzzuf source
         q = q.where(
             or_(
                 JobPosting.source == "wuzzuf",
@@ -46,18 +33,11 @@ async def list_jobs(
                 *[JobPosting.location.ilike(f"%{t}%") for t in EG_TERMS]
             )
         )
-    elif country:
-        q = q.where(
-            or_(
-                JobPosting.country.ilike(f"%{country}%"),
-                JobPosting.location.ilike(f"%{country}%")
-            )
-        )
 
     result = await db.execute(q)
     jobs = result.scalars().all()
 
-    # DB empty — fetch real jobs now
+    # DB empty — fetch now and retry
     if not jobs:
         await fetch_and_store_jobs()
         result = await db.execute(q)
@@ -99,7 +79,14 @@ async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
 
 
 def _serialize(j: JobPosting) -> dict:
-    is_eg = _is_egypt_job(j)
+    loc = (j.location or "").lower()
+    ctr = (getattr(j, "country", "") or "").lower()
+    src = (j.source or "").lower()
+    is_eg = (
+        src == "wuzzuf" or
+        ctr in ("eg", "egy", "egypt") or
+        any(t in loc for t in EG_TERMS)
+    )
     return {
         "id": j.id,
         "external_id": j.external_id,
@@ -114,5 +101,5 @@ def _serialize(j: JobPosting) -> dict:
         "salary_max": j.salary_max,
         "remote": j.remote,
         "posted_at": j.posted_at.isoformat() if j.posted_at else None,
-        "country": "eg" if is_eg else ("remote" if j.remote else ""),
+        "country": "eg" if is_eg else ("remote" if j.remote else "worldwide"),
     }

@@ -36,6 +36,7 @@ class JobPosting(Base):
     salary_min: Mapped[float] = mapped_column(Float, nullable=True)
     salary_max: Mapped[float] = mapped_column(Float, nullable=True)
     remote: Mapped[bool] = mapped_column(Boolean, default=False)
+    country: Mapped[str] = mapped_column(String(10), default="")
     posted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     fetched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

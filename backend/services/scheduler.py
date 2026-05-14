@@ -66,6 +66,7 @@ async def fetch_and_store_jobs(cv_skills: list[str] = None):
                 salary_min=d.get("salary_min"),
                 salary_max=d.get("salary_max"),
                 remote=d.get("remote", False),
+                country=d.get("country", ""),
                 posted_at=datetime.utcnow(),
             ))
             new_count += 1
