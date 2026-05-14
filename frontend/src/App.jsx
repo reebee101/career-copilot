@@ -534,19 +534,19 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
   const [region,setRegion]=useState('egypt')
 
   const scoreJob=useCallback((job,skills,profileSummary)=>{
-    if(!skills||skills.length===0) return 0
     const title=(job.title||'').toLowerCase()
     const desc=(job.description_full||job.description||'').toLowerCase()
+
+    // No skills yet — show all jobs with a neutral score
+    if(!skills||skills.length===0) return 50
 
     // 1. Skill match — title hit worth 3x desc hit
     let skillPoints=0, matchedSkills=0
     skills.forEach(s=>{
       const sl=s.toLowerCase().trim()
       if(!sl||sl.length<2) return
-      const inTitle=title.includes(sl)
-      const inDesc=desc.includes(sl)
-      if(inTitle){ skillPoints+=3; matchedSkills++ }
-      else if(inDesc){ skillPoints+=1; matchedSkills++ }
+      if(title.includes(sl)){ skillPoints+=3; matchedSkills++ }
+      else if(desc.includes(sl)){ skillPoints+=1; matchedSkills++ }
     })
     const skillRatio=matchedSkills/Math.max(skills.length,1)
     const skillScore=Math.min(55, Math.round(skillRatio*55 + Math.min(skillPoints,20)))
@@ -557,21 +557,20 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
     const titleOverlap=titleWords.filter(w=>summaryWords.some(sw=>sw.includes(w)||w.includes(sw))).length
     const titleScore=Math.min(25, titleOverlap*8)
 
-    // 3. Seniority alignment
+    // 3. Seniority alignment penalty
     const seniorWords=['senior','lead','principal','director','head','chief','vp','manager']
     const juniorWords=['junior','graduate','entry','intern','trainee','associate']
     const cvSenior=summaryWords.some(w=>seniorWords.includes(w))
     const cvJunior=summaryWords.some(w=>juniorWords.includes(w))
-    const jobSenior=seniorWords.some(w=>title.includes(w))
-    const jobJunior=juniorWords.some(w=>title.includes(w))
     let seniorityPenalty=0
-    if(cvSenior&&jobJunior) seniorityPenalty=15
-    if(cvJunior&&jobSenior) seniorityPenalty=10
+    if(cvSenior&&juniorWords.some(w=>title.includes(w))) seniorityPenalty=15
+    if(cvJunior&&seniorWords.some(w=>title.includes(w))) seniorityPenalty=10
 
     // 4. Recency bonus
     const posted=job.posted_at?new Date(job.posted_at):null
     const ageBonus=posted&&(Date.now()-posted.getTime())<14*24*3600*1000?5:0
 
+    // Ensure minimum 10 so nothing is hidden just because skills don't overlap perfectly
     return Math.max(10, Math.min(99, Math.round(skillScore+titleScore+ageBonus-seniorityPenalty)))
   },[])
 
@@ -579,26 +578,17 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
     setLoading(true)
     try {
       const remoteOnly=region==='remote'
+      // For egypt tab, let the backend do the filtering — don't pass country for worldwide/remote
       const country=region==='egypt'?'egypt':null
       const rawJobs=await api.fetchJobs(remoteOnly,country)
       const skills=profile?.analysis?.skills||[]
       const summary=profile?.analysis?.summary||''
       const scored=rawJobs
         .map(job=>({...job,match_score:scoreJob(job,skills,summary)}))
-        .filter(job=>{
-          // Egypt tab: trust the backend — it already filtered by country/location/wuzzuf
-          // Still do a light client-side check as safety net
-          if(region==='egypt'){
-            const ctr=(job.country||'').toLowerCase()
-            const src=(job.source||'').toLowerCase()
-            const loc=(job.location||'').toLowerCase()
-            const EG=['egypt','cairo','alexandria','giza','alex','hurghada','luxor','mansoura','tanta','eg']
-            return src==='wuzzuf'||ctr==='eg'||ctr==='egy'||EG.some(t=>loc.includes(t))||job.remote
-          }
-          if(region==='remote') return job.remote===true
-          return true // worldwide — show all
-        })
-        .filter(job=>job.match_score>=20) // lower threshold — let relevance sort do the work
+        // No client-side location filtering — the backend already handles it per tab
+        // Only filter remote tab strictly; egypt and worldwide trust the backend
+        .filter(job=>region==='remote'?job.remote===true:true)
+        // Show everything — let match score do the ranking, don't hide low-match jobs
         .sort((a,b)=>b.match_score-a.match_score)
       setJobs(scored)
     } catch(e){ console.error(e) }
