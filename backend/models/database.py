@@ -62,6 +62,14 @@ class Application(Base):
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Migrate: add country column if it doesn't exist (for existing DBs)
+        try:
+            await conn.exec_driver_sql(
+                "ALTER TABLE job_postings ADD COLUMN country VARCHAR(10) DEFAULT ''"
+            )
+            print("[DB] Migrated: added country column to job_postings")
+        except Exception:
+            pass  # Column already exists — fine
 
 async def get_db():
     async with AsyncSessionLocal() as session:

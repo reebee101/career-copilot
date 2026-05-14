@@ -1,12 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import uvicorn, os
+import uvicorn, os, asyncio
 from routers import cv, jobs, applications, interview
 from models.database import init_db
-from services.scheduler import start_scheduler
+from services.scheduler import start_scheduler, fetch_and_store_jobs
 
-app = FastAPI(title="Career Copilot Egypt", version="2.0.0")
+app = FastAPI(title="Career Copilot", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,16 +25,19 @@ app.include_router(interview.router, prefix="/api/interview", tags=["Interview"]
 async def startup():
     await init_db()
     start_scheduler()
-    # Fetch jobs on startup — always runs so jobs are fresh after container restart
-    from services.scheduler import fetch_and_store_jobs
-    from sqlalchemy import select, func
-    from models.database import AsyncSessionLocal, JobPosting
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(select(func.count()).select_from(JobPosting))
-        count = result.scalar()
-    print(f"[Startup] DB has {count} jobs — fetching fresh jobs now...")
-    import asyncio
-    asyncio.ensure_future(fetch_and_store_jobs())
+    # Fire-and-forget background job fetch so the board is never empty
+    asyncio.get_event_loop().create_task(_startup_fetch())
+
+
+async def _startup_fetch():
+    """Runs after startup completes — fetches jobs in the background."""
+    await asyncio.sleep(2)  # let the server fully start first
+    print("[Startup] Fetching jobs in background...")
+    try:
+        count = await fetch_and_store_jobs()
+        print(f"[Startup] Done — {count} new jobs stored")
+    except Exception as e:
+        print(f"[Startup] Job fetch error: {e}")
 
 
 if os.path.exists("../frontend/dist"):
@@ -42,7 +45,7 @@ if os.path.exists("../frontend/dist"):
 else:
     @app.get("/")
     def root():
-        return {"status": "Career Copilot Egypt API v2 running. Build frontend: cd frontend && npm run build"}
+        return {"status": "Career Copilot API running"}
 
 
 if __name__ == "__main__":
