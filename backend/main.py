@@ -25,16 +25,16 @@ app.include_router(interview.router, prefix="/api/interview", tags=["Interview"]
 async def startup():
     await init_db()
     start_scheduler()
-    # Fetch jobs immediately on first boot so DB is never empty
+    # Fetch jobs on startup — always runs so jobs are fresh after container restart
     from services.scheduler import fetch_and_store_jobs
     from sqlalchemy import select, func
     from models.database import AsyncSessionLocal, JobPosting
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(func.count()).select_from(JobPosting))
         count = result.scalar()
-    if count == 0:
-        print("[Startup] DB empty — fetching jobs now...")
-        await fetch_and_store_jobs()
+    print(f"[Startup] DB has {count} jobs — fetching fresh jobs now...")
+    import asyncio
+    asyncio.ensure_future(fetch_and_store_jobs())
 
 
 if os.path.exists("../frontend/dist"):
