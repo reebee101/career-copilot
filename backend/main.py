@@ -6,7 +6,7 @@ from routers import cv, jobs, applications, interview
 from models.database import init_db
 from services.scheduler import start_scheduler
 
-app = FastAPI(title="AI Career Copilot", version="1.0.0")
+app = FastAPI(title="Career Copilot Egypt", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,17 +20,30 @@ app.include_router(jobs.router, prefix="/api/jobs", tags=["Jobs"])
 app.include_router(applications.router, prefix="/api/applications", tags=["Applications"])
 app.include_router(interview.router, prefix="/api/interview", tags=["Interview"])
 
+
 @app.on_event("startup")
 async def startup():
     await init_db()
     start_scheduler()
+    # Fetch jobs immediately on first boot so DB is never empty
+    from services.scheduler import fetch_and_store_jobs
+    from sqlalchemy import select, func
+    from models.database import AsyncSessionLocal, JobPosting
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(func.count()).select_from(JobPosting))
+        count = result.scalar()
+    if count == 0:
+        print("[Startup] DB empty — fetching jobs now...")
+        await fetch_and_store_jobs()
+
 
 if os.path.exists("../frontend/dist"):
     app.mount("/", StaticFiles(directory="../frontend/dist", html=True), name="static")
 else:
     @app.get("/")
     def root():
-        return {"status": "API running. Build frontend with: cd frontend && npm run build"}
+        return {"status": "Career Copilot Egypt API v2 running. Build frontend: cd frontend && npm run build"}
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

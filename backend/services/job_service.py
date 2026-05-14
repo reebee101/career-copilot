@@ -74,9 +74,6 @@ async def search_jobs_arbeitnow(cv_skills: list[str] = None) -> list[dict]:
                         continue
                     # Filter for remote or MENA-friendly
                     is_remote = job.get("remote", False)
-                    loc = job.get("location", "").lower()
-                    if not is_remote and "egypt" not in loc and "mena" not in loc and "worldwide" not in loc and "anywhere" not in loc:
-                        continue
                     seen.add(url)
                     results.append({
                         "external_id": f"arbeitnow_{abs(hash(url))}",

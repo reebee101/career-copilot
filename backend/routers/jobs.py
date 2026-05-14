@@ -1,13 +1,23 @@
 from fastapi import APIRouter, Depends, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, delete, or_
+from sqlalchemy import select, desc, delete, or_, func
 from models.database import get_db, JobPosting, AsyncSessionLocal
 from services.scheduler import fetch_and_store_jobs
 from datetime import datetime
 
 router = APIRouter()
 
-EG_TERMS = ["egypt", "cairo", "alexandria", "giza", "alex", "hurghada", "luxor", "mansoura", "tanta", "maadi", "zamalek"]
+EG_TERMS = ["egypt", "cairo", "alexandria", "giza", "alex", "hurghada",
+            "luxor", "mansoura", "tanta", "maadi", "zamalek", "heliopolis"]
+
+
+def _eg_filter():
+    return or_(
+        JobPosting.source == "wuzzuf",
+        JobPosting.country.in_(["eg", "egy", "egypt"]),
+        *[JobPosting.location.ilike(f"%{t}%") for t in EG_TERMS]
+    )
+
 
 @router.get("/")
 async def list_jobs(
@@ -17,28 +27,27 @@ async def list_jobs(
     limit: int = Query(200, le=500),
     offset: int = 0,
 ):
-    q = (select(JobPosting)
-         .where(JobPosting.source != "demo")
-         .order_by(desc(JobPosting.fetched_at))
-         .limit(limit).offset(offset))
+    # Check if DB has any jobs at all
+    total = (await db.execute(select(func.count()).select_from(JobPosting))).scalar()
+
+    if total == 0:
+        print("[Jobs] DB empty — fetching now...")
+        await fetch_and_store_jobs()
+
+    # Build query
+    q = select(JobPosting).order_by(desc(JobPosting.fetched_at)).limit(limit).offset(offset)
 
     if remote_only:
         q = q.where(JobPosting.remote == True)
-
-    if country and country.lower() in ("egypt", "eg"):
-        q = q.where(
-            or_(
-                JobPosting.source == "wuzzuf",
-                JobPosting.country.in_(["eg", "egy", "egypt"]),
-                *[JobPosting.location.ilike(f"%{t}%") for t in EG_TERMS]
-            )
-        )
+    elif country and country.lower() in ("egypt", "eg"):
+        q = q.where(_eg_filter())
 
     result = await db.execute(q)
     jobs = result.scalars().all()
 
-    # DB empty — fetch now and retry
-    if not jobs:
+    # If Egypt specifically returned nothing, trigger a fresh fetch and retry once
+    if not jobs and country and country.lower() in ("egypt", "eg"):
+        print("[Jobs] Egypt returned 0 — re-fetching...")
         await fetch_and_store_jobs()
         result = await db.execute(q)
         jobs = result.scalars().all()
@@ -47,10 +56,9 @@ async def list_jobs(
 
 
 @router.delete("/clear-demos")
-async def clear_demos():
-    async with AsyncSessionLocal() as db:
-        await db.execute(delete(JobPosting).where(JobPosting.source == "demo"))
-        await db.commit()
+async def clear_demos(db: AsyncSession = Depends(get_db)):
+    await db.execute(delete(JobPosting).where(JobPosting.source == "demo"))
+    await db.commit()
     return {"message": "Demo jobs cleared"}
 
 
@@ -82,11 +90,7 @@ def _serialize(j: JobPosting) -> dict:
     loc = (j.location or "").lower()
     ctr = (getattr(j, "country", "") or "").lower()
     src = (j.source or "").lower()
-    is_eg = (
-        src == "wuzzuf" or
-        ctr in ("eg", "egy", "egypt") or
-        any(t in loc for t in EG_TERMS)
-    )
+    is_eg = src == "wuzzuf" or ctr in ("eg", "egy", "egypt") or any(t in loc for t in EG_TERMS)
     return {
         "id": j.id,
         "external_id": j.external_id,

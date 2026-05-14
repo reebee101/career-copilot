@@ -1,5 +1,5 @@
 """cv_service.py — All Groq-powered CV operations."""
-import json, io
+import json, io, re
 from groq import Groq
 from config import get_settings
 
@@ -9,20 +9,34 @@ MODEL = "llama-3.3-70b-versatile"
 
 
 def _chat_json(messages: list, max_tokens: int = 2000) -> dict:
-    response = client.chat.completions.create(
-        model=MODEL, max_tokens=max_tokens,
-        response_format={"type": "json_object"},
-        messages=messages,
-    )
-    return json.loads(response.choices[0].message.content)
+    try:
+        response = client.chat.completions.create(
+            model=MODEL, max_tokens=max_tokens,
+            response_format={"type": "json_object"},
+            messages=messages,
+        )
+        text = response.choices[0].message.content
+        # Strip markdown fences if model wraps response
+        text = text.strip()
+        if text.startswith("```"):
+            text = re.sub(r"^```[a-z]*\n?", "", text)
+            text = re.sub(r"\n?```$", "", text)
+        return json.loads(text)
+    except Exception as e:
+        print(f"[Groq JSON] Error: {e}")
+        raise
 
 
 def _chat_text(prompt: str, max_tokens: int = 800) -> str:
-    response = client.chat.completions.create(
-        model=MODEL, max_tokens=max_tokens,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return response.choices[0].message.content
+    try:
+        response = client.chat.completions.create(
+            model=MODEL, max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"[Groq Text] Error: {e}")
+        raise
 
 
 def extract_cv_text(content: bytes, filename: str) -> str:
