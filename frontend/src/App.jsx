@@ -1470,11 +1470,449 @@ function BulletRewriter({ profile }) {
   )
 }
 
+// ── PROJECTS ──────────────────────────────────────────────────
+function Projects({ sessionId, profile, onCVUpdated }) {
+  const [projects, setProjects] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
+  const [selectedProject, setSelectedProject] = useState(null)
+  const [showGitHubModal, setShowGitHubModal] = useState(false)
+  const [repoName, setRepoName] = useState('')
+  const [isPrivate, setIsPrivate] = useState(false)
+  const [creatingRepo, setCreatingRepo] = useState(false)
+  const [integrating, setIntegrating] = useState(false)
+  const [editingProject, setEditingProject] = useState(null)
+  const [editDescription, setEditDescription] = useState('')
+  const [editBullets, setEditBullets] = useState([])
+  const [showMetadataForm, setShowMetadataForm] = useState(false)
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [metadata, setMetadata] = useState({
+    project_date: '',
+    is_team_project: false,
+    team_size: '',
+    your_role: ''
+  })
+
+  useEffect(() => {
+    loadProjects()
+  }, [sessionId])
+
+  const loadProjects = async () => {
+    if (!sessionId) return
+    setLoading(true)
+    try {
+      const result = await api.listProjects(sessionId)
+      setProjects(result.projects || [])
+    } catch (e) {
+      console.error('Failed to load projects:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleFileSelect = (file) => {
+    if (!file) return
+    if (!file.name.toLowerCase().endsWith('.zip')) {
+      setError('Only ZIP files are supported')
+      return
+    }
+    setSelectedFile(file)
+    setShowMetadataForm(true)
+    setError('')
+  }
+
+  const handleFileUpload = async () => {
+    if (!selectedFile) return
+    
+    setUploading(true)
+    setError('')
+    try {
+      const result = await api.uploadProject(selectedFile, sessionId, metadata)
+      setProjects([result, ...projects])
+      setSelectedProject(result)
+      setShowMetadataForm(false)
+      setSelectedFile(null)
+      setMetadata({ project_date: '', is_team_project: false, team_size: '', your_role: '' })
+      alert('Project analyzed successfully! You can now create a GitHub repo or add it to your CV.')
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const openGitHubModal = (project) => {
+    setSelectedProject(project)
+    setRepoName(project.project_name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''))
+    setShowGitHubModal(true)
+  }
+
+  const createGitHubRepo = async () => {
+    if (!repoName.trim()) {
+      alert('Please enter a repository name')
+      return
+    }
+    
+    setCreatingRepo(true)
+    try {
+      const result = await api.createGitHubRepo(selectedProject.id, repoName, isPrivate)
+      alert(`GitHub repository created successfully!\n${result.repo_url}`)
+      await loadProjects()
+      setShowGitHubModal(false)
+      window.open(result.repo_url, '_blank')
+    } catch (e) {
+      alert(`Failed to create GitHub repo: ${e.message}\n\nMake sure you've set GITHUB_TOKEN in your .env file.`)
+    } finally {
+      setCreatingRepo(false)
+    }
+  }
+
+  const integrateToCV = async (projectId) => {
+    if (!confirm('This will add the project to your CV and regenerate it. Continue?')) return
+    
+    setIntegrating(true)
+    try {
+      const result = await api.integrateProjectToCV(sessionId, projectId)
+      alert(`Project added to CV!\nATS Score: ${result.ats_score}/100 (${result.ats_score_change >= 0 ? '+' : ''}${result.ats_score_change} change)`)
+      await loadProjects()
+      if (onCVUpdated) onCVUpdated(result)
+    } catch (e) {
+      alert(`Failed to integrate project: ${e.message}`)
+    } finally {
+      setIntegrating(false)
+    }
+  }
+
+  const startEdit = (project) => {
+    setEditingProject(project.id)
+    setEditDescription(project.cv_description)
+    setEditBullets([...project.bullet_points])
+  }
+
+  const saveEdit = async () => {
+    try {
+      await api.updateProject(editingProject, editDescription, editBullets)
+      await loadProjects()
+      setEditingProject(null)
+      alert('Project updated successfully!')
+    } catch (e) {
+      alert(`Failed to update project: ${e.message}`)
+    }
+  }
+
+  const deleteProject = async (projectId) => {
+    if (!confirm('Delete this project? This cannot be undone.')) return
+    try {
+      await api.deleteProject(projectId)
+      await loadProjects()
+    } catch (e) {
+      alert(`Failed to delete project: ${e.message}`)
+    }
+  }
+
+  return (
+    <div>
+      {/* Upload section */}
+      <div className="card" style={{ marginBottom: 10, background: 'linear-gradient(135deg, #FFF5F8 0%, #FFF 100%)', border: '1.5px solid var(--accent)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <div style={{ width: 40, height: 40, background: 'var(--accent)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Upload size={20} color="white" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>Upload Project ZIP</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>AI will analyze your code, generate CV-ready descriptions, and optionally create a GitHub repo</div>
+          </div>
+        </div>
+        <input
+          type="file"
+          accept=".zip"
+          onChange={(e) => handleFileSelect(e.target.files[0])}
+          style={{ display: 'none' }}
+          id="project-upload"
+          disabled={uploading}
+        />
+        <button
+          className="btn btn-primary"
+          onClick={() => document.getElementById('project-upload').click()}
+          disabled={uploading}
+          style={{ width: '100%', justifyContent: 'center' }}
+        >
+          {uploading ? <><Spinner /> Analyzing project…</> : <><Upload size={14} /> Choose ZIP file</>}
+        </button>
+        {error && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '10px 12px', background: 'var(--coral-light)', borderRadius: 'var(--radius-sm)', color: 'var(--coral)', fontSize: 13, marginTop: 10, border: '1px solid #F5D0CD' }}>
+            <AlertCircle size={14} /> {error}
+          </div>
+        )}
+      </div>
+
+      {/* Info card */}
+      <div style={{ padding: '12px 14px', background: 'var(--accent2-light)', borderRadius: 'var(--radius-sm)', fontSize: 12, color: 'var(--accent2-dark)', marginBottom: 12, border: '1px solid var(--border-blue)' }}>
+        <strong>How it works:</strong> Upload project ZIP → AI analyzes tech stack & features → Generate CV bullets with metrics → Create GitHub repo with README → Add to your CV
+      </div>
+
+      {/* Projects list */}
+      {loading ? (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '2rem', justifyContent: 'center', color: 'var(--text-secondary)' }}>
+          <Spinner /> Loading projects…
+        </div>
+      ) : projects.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>📦</div>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>No projects yet</div>
+          <div style={{ fontSize: 13 }}>Upload a project ZIP to get started</div>
+        </div>
+      ) : (
+        projects.map((project) => (
+          <div key={project.id} className="card" style={{ marginBottom: 10, borderLeft: `3px solid ${project.integrated_to_cv ? 'var(--success)' : 'var(--accent)'}` }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <div style={{ fontWeight: 600, fontSize: 15 }}>{project.project_name}</div>
+                  <span className="badge badge-purple">{project.project_type}</span>
+                  <span className={`badge ${project.complexity === 'Expert' ? 'badge-coral' : project.complexity === 'Advanced' ? 'badge-amber' : 'badge-green'}`}>
+                    {project.complexity}
+                  </span>
+                  {project.integrated_to_cv && <span className="badge badge-green">✓ In CV</span>}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                  {editingProject === project.id ? (
+                    <textarea
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      style={{ width: '100%', minHeight: 60, marginBottom: 8 }}
+                    />
+                  ) : (
+                    project.cv_description
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
+                  {project.tech_stack.slice(0, 8).map((tech, i) => (
+                    <span key={i} className="badge badge-blue">{tech}</span>
+                  ))}
+                  {project.tech_stack.length > 8 && <span className="badge">+{project.tech_stack.length - 8} more</span>}
+                </div>
+              </div>
+            </div>
+
+            {/* Bullet points */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 6 }}>CV Bullet Points</div>
+              {editingProject === project.id ? (
+                <div>
+                  {editBullets.map((bullet, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                      <input
+                        value={bullet}
+                        onChange={(e) => {
+                          const newBullets = [...editBullets]
+                          newBullets[i] = e.target.value
+                          setEditBullets(newBullets)
+                        }}
+                        style={{ flex: 1, fontSize: 13 }}
+                      />
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setEditBullets(editBullets.filter((_, idx) => idx !== i))}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setEditBullets([...editBullets, ''])}
+                    style={{ marginTop: 6 }}
+                  >
+                    <PlusCircle size={12} /> Add bullet
+                  </button>
+                </div>
+              ) : (
+                project.bullet_points.map((bullet, i) => (
+                  <div key={i} style={{ fontSize: 13, padding: '6px 10px', background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)', borderLeft: '2px solid var(--accent)', marginBottom: 4 }}>
+                    • {bullet}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* GitHub link */}
+            {project.github_url && (
+              <div style={{ padding: '8px 12px', background: 'var(--success-light)', borderRadius: 'var(--radius-sm)', marginBottom: 10, border: '1px solid #C5E8D6' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                  <Check size={14} color="var(--success)" />
+                  <span style={{ color: 'var(--success)', fontWeight: 500 }}>GitHub:</span>
+                  <a href={project.github_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {project.github_repo_name} <ExternalLink size={12} />
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {editingProject === project.id ? (
+                <>
+                  <button className="btn btn-primary btn-sm" onClick={saveEdit}>
+                    <Save size={12} /> Save changes
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setEditingProject(null)}>
+                    <X size={12} /> Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="btn btn-secondary btn-sm" onClick={() => startEdit(project)}>
+                    <Edit3 size={12} /> Edit description
+                  </button>
+                  {!project.github_url && (
+                    <button className="btn btn-primary btn-sm" onClick={() => openGitHubModal(project)}>
+                      <Zap size={12} /> Create GitHub repo
+                    </button>
+                  )}
+                  {!project.integrated_to_cv && (
+                    <button className="btn btn-primary btn-sm" onClick={() => integrateToCV(project.id)} disabled={integrating}>
+                      {integrating ? <><Spinner /> Adding…</> : <><PlusCircle size={12} /> Add to CV</>}
+                    </button>
+                  )}
+                  <button className="btn btn-ghost btn-sm" onClick={() => deleteProject(project.id)} style={{ color: 'var(--coral)' }}>
+                    <X size={12} /> Delete
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        ))
+      )}
+
+      {/* Metadata form modal */}
+      {showMetadataForm && selectedFile && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,26,36,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999, padding: '1rem' }}>
+          <div className="card" style={{ maxWidth: 520, width: '100%', padding: '1.5rem', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Project Details</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Help AI generate better CV descriptions</div>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setShowMetadataForm(false); setSelectedFile(null) }}><X size={14} /></button>
+            </div>
+
+            <div style={{ padding: '12px 14px', background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)', fontSize: 12, color: 'var(--accent-dark)', marginBottom: 16, border: '1px solid var(--border)' }}>
+              <strong>Selected:</strong> {selectedFile.name}
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, display: 'block' }}>
+                Project Date <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}>(optional)</span>
+              </label>
+              <input
+                value={metadata.project_date}
+                onChange={(e) => setMetadata({ ...metadata, project_date: e.target.value })}
+                placeholder="e.g., Jan 2024 - Mar 2024 or Q1 2024"
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={metadata.is_team_project}
+                  onChange={(e) => setMetadata({ ...metadata, is_team_project: e.target.checked })}
+                />
+                <span style={{ fontSize: 13, fontWeight: 500 }}>This was a team project</span>
+              </label>
+              {metadata.is_team_project && (
+                <input
+                  type="number"
+                  value={metadata.team_size}
+                  onChange={(e) => setMetadata({ ...metadata, team_size: e.target.value })}
+                  placeholder="Team size (e.g., 4)"
+                  style={{ width: '100%' }}
+                  min="2"
+                />
+              )}
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, display: 'block' }}>
+                Your Specific Role <span style={{ color: 'var(--coral)' }}>*</span>
+              </label>
+              <textarea
+                value={metadata.your_role}
+                onChange={(e) => setMetadata({ ...metadata, your_role: e.target.value })}
+                placeholder="What exactly did YOU do? e.g., 'Built the authentication system and REST API. Implemented JWT tokens and role-based access control. Optimized database queries reducing load time by 40%.'"
+                style={{ width: '100%', minHeight: 100 }}
+              />
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>
+                Be specific about YOUR contributions, not the whole project. Include metrics if possible.
+              </div>
+            </div>
+
+            <div style={{ padding: '10px 12px', background: 'var(--accent2-light)', borderRadius: 'var(--radius-sm)', fontSize: 12, color: 'var(--accent2-dark)', marginBottom: 16, border: '1px solid var(--border-blue)' }}>
+              <strong>💡 Tip:</strong> The more specific you are about your role, the better the AI-generated CV bullets will be!
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" onClick={handleFileUpload} disabled={uploading || !metadata.your_role.trim()} style={{ flex: 1, justifyContent: 'center' }}>
+                {uploading ? <><Spinner /> Analyzing…</> : <><Zap size={14} /> Analyze Project</>}
+              </button>
+              <button className="btn btn-ghost" onClick={() => { setShowMetadataForm(false); setSelectedFile(null) }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GitHub modal */}
+      {showGitHubModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,26,36,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999, padding: '1rem' }}>
+          <div className="card" style={{ maxWidth: 480, width: '100%', padding: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Create GitHub Repository</div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowGitHubModal(false)}><X size={14} /></button>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, display: 'block' }}>Repository Name</label>
+              <input
+                value={repoName}
+                onChange={(e) => setRepoName(e.target.value)}
+                placeholder="my-awesome-project"
+                style={{ width: '100%' }}
+              />
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={isPrivate}
+                  onChange={(e) => setIsPrivate(e.target.checked)}
+                />
+                <span style={{ fontSize: 13 }}>Make repository private</span>
+              </label>
+            </div>
+            <div style={{ padding: '10px 12px', background: 'var(--accent2-light)', borderRadius: 'var(--radius-sm)', fontSize: 12, color: 'var(--accent2-dark)', marginBottom: 16, border: '1px solid var(--border-blue)' }}>
+              <strong>Note:</strong> This will create a new repository with a professional README based on your project analysis. Make sure you've set GITHUB_TOKEN in your .env file.
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" onClick={createGitHubRepo} disabled={creatingRepo} style={{ flex: 1, justifyContent: 'center' }}>
+                {creatingRepo ? <><Spinner /> Creating…</> : <><Zap size={14} /> Create Repository</>}
+              </button>
+              <button className="btn btn-ghost" onClick={() => setShowGitHubModal(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── ROOT APP ──────────────────────────────────────────────────
 const TABS=[
   {id:'dashboard',label:'Dashboard',Icon:LayoutDashboard},
   {id:'jobs',label:'Jobs',Icon:Briefcase},
   {id:'jd',label:'JD Analyzer',Icon:Target},
+  {id:'projects',label:'Projects',Icon:Upload},
   {id:'editcv',label:'Edit CV',Icon:Edit3},
   {id:'bullets',label:'Bullets',Icon:TrendingUp},
   {id:'tracker',label:'Tracker',Icon:List},
@@ -1625,6 +2063,7 @@ export default function App() {
           {tab==='dashboard'&&<Dashboard profile={profile} applications={applications}/>}
           {tab==='jobs'&&<JobsBoard sessionId={sessionId} profile={profile} onCreateApp={handleCreateApp}/>}
           {tab==='jd'&&<JDAnalyzer sessionId={sessionId} onCreateApp={handleCreateApp}/>}
+          {tab==='projects'&&<Projects sessionId={sessionId} profile={profile} onCVUpdated={handleCVSaved}/>}
           {tab==='editcv'&&<EditCV sessionId={sessionId} profile={profile} onSaved={handleCVSaved}/>}
           {tab==='bullets'&&<BulletRewriter profile={profile}/>}
           {tab==='tracker'&&<ApplicationsTracker sessionId={sessionId} applications={applications} onRefresh={loadApplications}/>}

@@ -11,6 +11,7 @@ A full-stack AI-powered job hunt platform for ML/AI engineers. Built with your e
 | **CV Upload & Analysis** | Upload PDF/DOCX → Groq extracts text, scores ATS (0-100), identifies gaps, rewrites bullets |
 | **Live Job Search** | Adzuna API fetches ML/AI jobs every 6 hours across Egypt, UAE, UK, US |
 | **JD Analyzer** | Paste any job description → match score, missing keywords, tailored bullets, cover letter |
+| **Project Upload → CV** | Upload project ZIP → AI analyzes code → generates CV-ready descriptions → creates GitHub repo → adds to CV |
 | **Bullet Rewriter** | All your CV bullets rewritten with action verb + metric + impact |
 | **Application Tracker** | Kanban board: Saved → Applied → Interview → Offer/Rejected |
 | **Auto-Apply** | Playwright fills and submits forms on LinkedIn Easy Apply, Greenhouse, Lever |
@@ -51,11 +52,14 @@ The script will:
 ### 2. Configure API keys
 Edit `backend/.env`:
 ```env
-ANTHROPIC_API_KEY=sk-ant-...   # Required
+GROQ_API_KEY=gsk_...           # Required - Get from https://console.groq.com
 
 # Job search (free tier, 250 req/day)
 ADZUNA_APP_ID=...              # https://developer.adzuna.com
 ADZUNA_API_KEY=...
+
+# GitHub integration (optional - for creating repos from projects)
+GITHUB_TOKEN=ghp_...           # Personal Access Token with 'repo' scope
 
 # Auto-apply (enable when ready)
 AUTO_APPLY_ENABLED=false        # Change to true to enable
@@ -116,6 +120,28 @@ Auto-apply uses Playwright to fill application forms. It's designed to be **surg
 4. The app applies in the background and updates the tracker
 
 **Important:** LinkedIn requires you to be logged in. For LinkedIn jobs, use their browser session by adding cookie-based auth (see `apply_service.py` comments).
+
+---
+
+## 📦 Projects Feature (NEW!)
+
+Turn your code into CV-ready descriptions in seconds:
+
+1. **Upload project ZIP** → AI analyzes your code
+2. **Tell AI what YOU did** → Provide your specific role and contributions
+3. **Get CV bullets** → AI generates professional descriptions with metrics
+4. **Create GitHub repo** (optional) → One-click repo with professional README
+5. **Add to CV** → Seamlessly integrate into your CV with updated ATS score
+
+**Example workflow:**
+```
+Upload "ecommerce-api.zip" →
+Fill form: "Built authentication and payment systems using Node.js..." →
+AI generates: "Developed RESTful API handling 10K+ requests/day..." →
+Create GitHub repo → Add to CV → ATS score: 72 → 80 (+8 points)
+```
+
+See [PROJECTS_FEATURE.md](./PROJECTS_FEATURE.md) for detailed documentation.
 
 ---
 

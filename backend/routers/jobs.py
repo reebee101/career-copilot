@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, delete, or_, func, and_
-from models.database import get_db, JobPosting, AsyncSessionLocal
+from models.database import get_db, JobPosting, CVProfile, AsyncSessionLocal
 from services.scheduler import fetch_and_store_jobs
+from services.recommendation_service import rank_jobs_by_cv, get_personalized_job_insights
 from datetime import datetime
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Strict Egypt city terms — no short strings that could false-match
@@ -30,10 +33,15 @@ async def list_jobs(
     country: str = None,
     limit: int = Query(200, le=500),
     offset: int = 0,
+    session_id: str = None,
 ):
+    """
+    List jobs with optional AI-powered ranking.
+    If session_id is provided, jobs are ranked by CV match.
+    """
     total = (await db.execute(select(func.count()).select_from(JobPosting))).scalar()
     if total == 0:
-        print("[Jobs] DB empty — fetching now...")
+        logger.info("Job database empty, fetching jobs...")
         await fetch_and_store_jobs()
 
     q = select(JobPosting).order_by(desc(JobPosting.fetched_at)).limit(limit).offset(offset)
@@ -47,12 +55,28 @@ async def list_jobs(
     jobs = result.scalars().all()
 
     if not jobs and country and country.lower() in ("egypt", "eg"):
-        print("[Jobs] Egypt returned 0 — re-fetching...")
+        logger.info("No Egypt jobs found, re-fetching...")
         await fetch_and_store_jobs()
         result = await db.execute(q)
         jobs = result.scalars().all()
 
-    return [_serialize(j) for j in jobs]
+    serialized_jobs = [_serialize(j) for j in jobs]
+    
+    # AI-powered ranking if session_id provided
+    if session_id:
+        try:
+            cv_result = await db.execute(select(CVProfile).where(CVProfile.session_id == session_id))
+            profile = cv_result.scalar_one_or_none()
+            
+            if profile and profile.raw_text:
+                logger.info(f"Ranking {len(serialized_jobs)} jobs for session {session_id}")
+                serialized_jobs = await rank_jobs_by_cv(profile.raw_text, serialized_jobs, top_n=limit)
+                logger.info(f"Jobs ranked, top match score: {serialized_jobs[0].get('match_score', 0) if serialized_jobs else 0}")
+        except Exception as e:
+            logger.error(f"Error ranking jobs: {e}")
+            # Continue with unranked jobs
+
+    return serialized_jobs
 
 
 @router.delete("/clear-demos")
@@ -92,6 +116,88 @@ async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
         from fastapi import HTTPException
         raise HTTPException(404, "Job not found")
     return _serialize(job)
+
+
+@router.get("/recommended/{session_id}")
+async def get_recommended_jobs(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(20, le=50),
+):
+    """
+    Get AI-ranked job recommendations based on CV.
+    Returns top matching jobs with match scores and reasons.
+    """
+    # Get CV
+    cv_result = await db.execute(select(CVProfile).where(CVProfile.session_id == session_id))
+    profile = cv_result.scalar_one_or_none()
+    
+    if not profile:
+        from fastapi import HTTPException
+        raise HTTPException(404, "CV not found. Please upload your CV first.")
+    
+    # Get all jobs
+    result = await db.execute(
+        select(JobPosting)
+        .order_by(desc(JobPosting.fetched_at))
+        .limit(200)  # Get more jobs for better ranking
+    )
+    jobs = result.scalars().all()
+    
+    if not jobs:
+        logger.info("No jobs available, fetching...")
+        await fetch_and_store_jobs()
+        result = await db.execute(
+            select(JobPosting)
+            .order_by(desc(JobPosting.fetched_at))
+            .limit(200)
+        )
+        jobs = result.scalars().all()
+    
+    # Serialize and rank
+    serialized_jobs = [_serialize(j) for j in jobs]
+    ranked_jobs = await rank_jobs_by_cv(profile.raw_text, serialized_jobs, top_n=limit)
+    
+    return {
+        "total": len(ranked_jobs),
+        "jobs": ranked_jobs,
+        "message": f"Top {len(ranked_jobs)} jobs ranked by AI based on your CV"
+    }
+
+
+@router.get("/{job_id}/insights")
+async def get_job_insights(
+    job_id: int,
+    session_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get detailed AI insights on why a specific job matches your CV.
+    """
+    # Get job
+    job_result = await db.execute(select(JobPosting).where(JobPosting.id == job_id))
+    job = job_result.scalar_one_or_none()
+    
+    if not job:
+        from fastapi import HTTPException
+        raise HTTPException(404, "Job not found")
+    
+    # Get CV
+    cv_result = await db.execute(select(CVProfile).where(CVProfile.session_id == session_id))
+    profile = cv_result.scalar_one_or_none()
+    
+    if not profile:
+        from fastapi import HTTPException
+        raise HTTPException(404, "CV not found. Please upload your CV first.")
+    
+    # Get insights
+    serialized_job = _serialize(job)
+    insights = await get_personalized_job_insights(profile.raw_text, serialized_job)
+    
+    return {
+        "job": serialized_job,
+        "insights": insights
+    }
 
 
 def _serialize(j: JobPosting) -> dict:

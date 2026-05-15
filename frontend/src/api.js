@@ -136,3 +136,64 @@ export async function refreshJobsSync(cvSkills = []) {
   const r = await fetch(url)
   return r.json()
 }
+
+
+// ── PROJECT UPLOAD & GITHUB INTEGRATION ───────────────────────
+export async function uploadProject(file, sessionId, metadata = {}) {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('session_id', sessionId)
+  if (metadata.project_date) fd.append('project_date', metadata.project_date)
+  if (metadata.is_team_project !== undefined) fd.append('is_team_project', metadata.is_team_project)
+  if (metadata.team_size) fd.append('team_size', metadata.team_size)
+  if (metadata.your_role) fd.append('your_role', metadata.your_role)
+  const r = await fetch(`${BASE}/projects/upload`, { method: 'POST', body: fd })
+  if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Project upload failed') }
+  return r.json()
+}
+
+export async function listProjects(sessionId) {
+  const r = await fetch(`${BASE}/projects/list/${sessionId}`)
+  if (!r.ok) throw new Error('Failed to load projects')
+  return r.json()
+}
+
+export async function getProject(projectId) {
+  const r = await fetch(`${BASE}/projects/${projectId}`)
+  if (!r.ok) throw new Error('Project not found')
+  return r.json()
+}
+
+export async function updateProject(projectId, cvDescription = null, bulletPoints = null) {
+  const r = await fetch(`${BASE}/projects/update`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project_id: projectId, cv_description: cvDescription, bullet_points: bulletPoints })
+  })
+  if (!r.ok) throw new Error('Failed to update project')
+  return r.json()
+}
+
+export async function createGitHubRepo(projectId, repoName, isPrivate = false) {
+  const r = await fetch(`${BASE}/projects/create-github-repo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project_id: projectId, repo_name: repoName, is_private: isPrivate })
+  })
+  if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Failed to create GitHub repo') }
+  return r.json()
+}
+
+export async function integrateProjectToCV(sessionId, projectId) {
+  const r = await fetch(`${BASE}/projects/integrate-to-cv`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId, project_id: projectId })
+  })
+  if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Failed to integrate project to CV') }
+  return r.json()
+}
+
+export async function deleteProject(projectId) {
+  await fetch(`${BASE}/projects/${projectId}`, { method: 'DELETE' })
+}
