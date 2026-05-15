@@ -87,7 +87,7 @@ async def search_jobs_arbeitnow(cv_skills: list[str] = None) -> list[dict]:
                         "salary_max": None,
                         "remote": is_remote,
                         "posted_at": datetime.utcnow().isoformat(),
-                        "country": "remote" if is_remote else "eg",
+                        "country": "remote" if is_remote else "worldwide",
                     })
     except Exception as e:
         print(f"[Arbeitnow] Error: {e}")
@@ -352,7 +352,7 @@ async def search_jobs_jsearch(cv_skills: list[str] = None) -> list[dict]:
                     is_remote = job.get("job_is_remote", False)
                     is_egypt = (
                         country in ("EG", "EGY", "EGYPT") or
-                        any(x in full_location for x in ["egypt", "cairo", "cair", "alexandria", "alex", "giza", " eg ", "egy"])
+                        any(x in full_location for x in ["egypt", "cairo", "alexandria", "giza", "egy"])
                     )
 
                     if not is_egypt and not is_remote:

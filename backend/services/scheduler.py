@@ -4,7 +4,7 @@ from sqlalchemy import select
 from models.database import AsyncSessionLocal, JobPosting
 from services.job_service import (
     search_jobs_jsearch, search_jobs_remotive, search_jobs_arbeitnow,
-    search_jobs_wuzzuf, search_jobs_adzuna, search_jobs_serpapi
+    search_jobs_wuzzuf, search_jobs_serpapi
 )
 from config import get_settings
 from datetime import datetime
@@ -17,59 +17,62 @@ async def fetch_and_store_jobs(cv_skills: list[str] = None):
     print(f"[Scheduler] Fetching jobs | skills={cv_skills}")
     jobs = []
 
-    # PRIMARY: JSearch — real jobs from Indeed, LinkedIn, Glassdoor + big Egypt companies
+    # 1. JSearch — Egypt-focused, real jobs from Indeed/LinkedIn/Glassdoor
     if settings.jsearch_api_key:
         jsearch = await search_jobs_jsearch(cv_skills)
         jobs.extend(jsearch)
         print(f"[Scheduler] JSearch: {len(jsearch)} jobs")
 
-    # SECONDARY: Free APIs — always run, no key needed
-    remotive = await search_jobs_remotive(cv_skills)
-    jobs.extend(remotive)
-
-    arbeitnow = await search_jobs_arbeitnow(cv_skills)
-    jobs.extend(arbeitnow)
-
-    # BEST-EFFORT: Wuzzuf scraping
+    # 2. Wuzzuf — best Egypt source
     wuzzuf = await search_jobs_wuzzuf(cv_skills)
     jobs.extend(wuzzuf)
+    print(f"[Scheduler] Wuzzuf: {len(wuzzuf)} jobs")
 
-    # OPTIONAL: Adzuna for UK/US/UAE
-    if settings.adzuna_app_id and settings.adzuna_api_key:
-        adzuna = await search_jobs_adzuna(
-            keywords=cv_skills or ["software engineer"],
-            countries=[c for c in settings.job_search_countries if c != "eg"],
-        )
-        jobs.extend(adzuna)
+    # 3. Remotive — remote worldwide jobs
+    remotive = await search_jobs_remotive(cv_skills)
+    jobs.extend(remotive)
+    print(f"[Scheduler] Remotive: {len(remotive)} jobs")
 
-    # OPTIONAL: SerpAPI
+    # 4. Arbeitnow — remote worldwide jobs
+    arbeitnow = await search_jobs_arbeitnow(cv_skills)
+    jobs.extend(arbeitnow)
+    print(f"[Scheduler] Arbeitnow: {len(arbeitnow)} jobs")
+
+    # 5. SerpAPI — Egypt-specific Google Jobs (if key set)
     if settings.serpapi_key:
-        for kw in (cv_skills or ["software engineer"])[:2]:
-            jobs.extend(await search_jobs_serpapi(f"{kw} Cairo Egypt EG"))
+        for kw in (cv_skills or ["engineer", "analyst"])[:2]:
+            serp = await search_jobs_serpapi(f"{kw} Cairo Egypt")
+            jobs.extend(serp)
+        print(f"[Scheduler] SerpAPI done")
+
+    # NOTE: Adzuna removed — only returns US/UK jobs, not relevant
 
     new_count = 0
     async with AsyncSessionLocal() as db:
         for d in jobs:
-            existing = await db.execute(
-                select(JobPosting).where(JobPosting.external_id == d["external_id"])
-            )
-            if existing.scalar_one_or_none():
-                continue
-            db.add(JobPosting(
-                external_id=d["external_id"],
-                title=d["title"],
-                company=d["company"],
-                location=d["location"],
-                description=d["description"],
-                apply_url=d["apply_url"],
-                source=d["source"],
-                salary_min=d.get("salary_min"),
-                salary_max=d.get("salary_max"),
-                remote=d.get("remote", False),
-                country=d.get("country", ""),
-                posted_at=datetime.utcnow(),
-            ))
-            new_count += 1
+            try:
+                existing = await db.execute(
+                    select(JobPosting).where(JobPosting.external_id == d["external_id"])
+                )
+                if existing.scalar_one_or_none():
+                    continue
+                db.add(JobPosting(
+                    external_id=d["external_id"],
+                    title=d["title"],
+                    company=d["company"],
+                    location=d["location"],
+                    description=d["description"],
+                    apply_url=d["apply_url"],
+                    source=d["source"],
+                    salary_min=d.get("salary_min"),
+                    salary_max=d.get("salary_max"),
+                    remote=d.get("remote", False),
+                    country=d.get("country", ""),
+                    posted_at=datetime.utcnow(),
+                ))
+                new_count += 1
+            except Exception as e:
+                print(f"[Scheduler] Error storing job: {e}")
         await db.commit()
 
     print(f"[Scheduler] Done — {new_count} new jobs stored ({len(jobs)} fetched)")
