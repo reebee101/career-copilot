@@ -72,6 +72,22 @@ export async function refreshJobs(cvSkills = []) {
   return r.json()
 }
 
+export async function getRawCV(sessionId) {
+  const r = await fetch(`${BASE}/cv/raw/${sessionId}`)
+  if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Failed to load CV') }
+  return r.json()
+}
+
+export async function editCV(sessionId, rawText) {
+  const r = await fetch(`${BASE}/cv/edit`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId, raw_text: rawText })
+  })
+  if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Failed to save CV') }
+  return r.json()
+}
+
 export async function listApplications(sessionId) {
   const r = await fetch(`${BASE}/applications/?session_id=${sessionId}`)
   if (!r.ok) throw new Error('Failed to load applications')

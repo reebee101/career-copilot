@@ -3,7 +3,7 @@ import {
   Upload, LayoutDashboard, Search, FileText, List, Mic, Award,
   Zap, RefreshCw, ChevronRight, X, Check, AlertCircle, Loader,
   ExternalLink, Bot, Briefcase, TrendingUp, Target, Send,
-  PlusCircle, LogIn, LogOut, History, GitCompare, User, Lock, Sparkles
+  PlusCircle, LogIn, LogOut, History, GitCompare, User, Lock, Sparkles, Edit3, Save
 } from 'lucide-react'
 import * as api from './api'
 
@@ -299,6 +299,112 @@ function CVCompareModal({ oldProfile, newProfile, cvHistory, onClose }) {
   )
 }
 
+// ── EDIT CV ───────────────────────────────────────────────────
+function EditCV({ sessionId, profile, onSaved }) {
+  const [text, setText] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [saved, setSaved] = useState(false)
+  const [charCount, setCharCount] = useState(0)
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      try {
+        const r = await api.getRawCV(sessionId)
+        setText(r.raw_text || '')
+        setCharCount((r.raw_text || '').length)
+      } catch(e) {
+        setError(e.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [sessionId])
+
+  const save = async () => {
+    if (text.trim().length < 100) {
+      setError('CV text is too short (min 100 characters).')
+      return
+    }
+    setSaving(true); setError(''); setSaved(false)
+    try {
+      const result = await api.editCV(sessionId, text)
+      setSaved(true)
+      onSaved(result)
+      setTimeout(() => setSaved(false), 3000)
+    } catch(e) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return (
+    <div style={{ display:'flex',alignItems:'center',justifyContent:'center',padding:'4rem',gap:10,color:'var(--text-secondary)' }}>
+      <Spinner /> Loading your CV...
+    </div>
+  )
+
+  return (
+    <div>
+      <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12 }}>
+        <div>
+          <div style={{ fontWeight:700,fontSize:16 }}>Edit your CV</div>
+          <div style={{ fontSize:13,color:'var(--text-secondary)',marginTop:2 }}>
+            Edit the text below and click Save — your ATS score will be recalculated instantly.
+          </div>
+        </div>
+        <div style={{ display:'flex',gap:8,alignItems:'center' }}>
+          <span style={{ fontSize:12,color:'var(--text-tertiary)' }}>{charCount.toLocaleString()} chars</span>
+          <button className="btn btn-primary" onClick={save} disabled={saving}>
+            {saving ? <><Spinner /> Re-analyzing…</> : saved ? <><Check size={14}/> Saved!</> : <><Save size={14}/> Save & re-score</>}
+          </button>
+        </div>
+      </div>
+
+      {saved && (
+        <div style={{ display:'flex',gap:8,alignItems:'center',padding:'10px 14px',background:'var(--success-light)',borderRadius:'var(--radius-sm)',marginBottom:10,border:'1px solid #C5E8D6',fontSize:13,color:'var(--success)' }}>
+          <Check size={14}/> CV saved and re-scored! Check your Dashboard for the updated ATS score.
+        </div>
+      )}
+      {error && (
+        <div style={{ display:'flex',gap:8,alignItems:'center',padding:'10px 14px',background:'var(--coral-light)',borderRadius:'var(--radius-sm)',marginBottom:10,border:'1px solid #F5D0CD',fontSize:13,color:'var(--coral)' }}>
+          <AlertCircle size={14}/> {error}
+        </div>
+      )}
+
+      <div style={{ position:'relative' }}>
+        <textarea
+          value={text}
+          onChange={e => { setText(e.target.value); setCharCount(e.target.value.length) }}
+          style={{
+            width:'100%',
+            minHeight:'65vh',
+            fontFamily:''DM Mono', 'Fira Code', 'Courier New', monospace',
+            fontSize:13,
+            lineHeight:1.7,
+            padding:'1rem',
+            border:'1.5px solid var(--border)',
+            borderRadius:'var(--radius)',
+            background:'white',
+            color:'var(--text)',
+            resize:'vertical',
+          }}
+          placeholder="Your CV text will appear here..."
+          spellCheck={false}
+        />
+      </div>
+
+      <div style={{ marginTop:10,padding:'10px 14px',background:'var(--accent2-light)',borderRadius:'var(--radius-sm)',fontSize:12,color:'var(--accent2-dark)',border:'1px solid var(--border-blue)' }}>
+        <strong>Tips:</strong> Add quantified achievements (e.g. "increased sales by 30%"), include keywords from job descriptions you're targeting, and make sure your job titles are clear. Each save re-runs the full ATS analysis.
+      </div>
+    </div>
+  )
+}
+
 // ── DASHBOARD ─────────────────────────────────────────────────
 function Dashboard({ profile, applications }) {
   const analysis = profile?.analysis||{}
@@ -543,48 +649,73 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
   const [selected,setSelected]=useState(null)
   const [region,setRegion]=useState('egypt')
 
+  // Common skill abbreviations/aliases for better matching
+  const SKILL_ALIASES={
+    'machine learning':['ml'],'artificial intelligence':['ai'],'natural language processing':['nlp'],
+    'deep learning':['dl'],'computer vision':['cv'],'business intelligence':['bi'],
+    'human resources':['hr'],'project management':['pm','pmp'],'customer relationship management':['crm'],
+    'enterprise resource planning':['erp'],'search engine optimization':['seo'],
+    'user experience':['ux'],'user interface':['ui'],'application programming interface':['api'],
+    'javascript':['js'],'typescript':['ts'],'python':['py'],'kubernetes':['k8s'],
+    'continuous integration':['ci'],'continuous deployment':['cd'],'amazon web services':['aws'],
+    'google cloud platform':['gcp'],'microsoft azure':['azure'],'structured query language':['sql'],
+    'postgresql':['postgres'],'mongodb':['mongo'],'react':['reactjs','react.js'],
+    'node':['nodejs','node.js'],'power bi':['powerbi'],'microsoft office':['ms office','office 365'],
+  }
+
   const scoreJob=useCallback((job,skills,profileSummary)=>{
     const title=(job.title||'').toLowerCase()
     const desc=(job.description_full||job.description||'').toLowerCase()
-    const jdFull=title+' '+desc
+    const jd=title+' '+desc
 
-    // No skills yet — neutral score so all jobs show
+    // No skills yet — show all jobs neutrally
     if(!skills||skills.length===0) return 55
 
-    // Normalise skills: split multi-word skills into tokens too
-    const skillTokens=[...new Set(
-      skills.flatMap(s=>s.toLowerCase().trim().split(/[\s/,+]+/)).filter(t=>t.length>1)
-    )]
-
-    // 1. Skill match — flexible: partial match counts
-    let titleHits=0, descHits=0
-    skillTokens.forEach(t=>{
-      if(title.includes(t)) titleHits++
-      else if(desc.includes(t)) descHits++
+    // Build expanded skill set including aliases and tokens
+    const expandedSkills=new Set()
+    skills.forEach(s=>{
+      const sl=s.toLowerCase().trim()
+      expandedSkills.add(sl)
+      // Add aliases
+      const aliases=SKILL_ALIASES[sl]||[]
+      aliases.forEach(a=>expandedSkills.add(a))
+      // Also add individual words for multi-word skills
+      sl.split(/[\s/,+.-]+/).filter(t=>t.length>2).forEach(t=>expandedSkills.add(t))
     })
-    const total=Math.max(skillTokens.length,1)
-    const skillScore=Math.min(60, Math.round((titleHits*3+descHits)/total*40 + Math.min(titleHits*4,20)))
 
-    // 2. Title ↔ summary word overlap
+    // 1. Score each skill — title match = 3pts, desc match = 1pt
+    let titlePts=0, descPts=0, matched=0
+    expandedSkills.forEach(skill=>{
+      if(title.includes(skill)){ titlePts+=3; matched++ }
+      else if(jd.includes(skill)){ descPts+=1; matched++ }
+    })
+    const total=Math.max(expandedSkills.size,1)
+    // Scale: if 40%+ skills match → 60+ score; 20%+ → 40+ score
+    const matchRatio=matched/total
+    const skillScore=Math.min(65, Math.round(matchRatio*65 + Math.min(titlePts*2,20)))
+
+    // 2. Title ↔ summary semantic overlap
     const summaryWords=(profileSummary||'').toLowerCase().split(/\W+/).filter(w=>w.length>3)
     const titleWords=title.split(/\W+/).filter(w=>w.length>3)
-    const overlap=titleWords.filter(w=>summaryWords.some(sw=>sw.includes(w)||w.includes(sw))).length
-    const titleScore=Math.min(30, overlap*10)
+    const overlap=titleWords.filter(w=>summaryWords.some(sw=>sw===w||sw.includes(w)||w.includes(sw))).length
+    const titleScore=Math.min(25, overlap*9)
 
-    // 3. Seniority alignment penalty
-    const seniorW=['senior','lead','principal','director','head','chief','vp','manager']
-    const juniorW=['junior','graduate','entry','intern','trainee','associate']
+    // 3. Seniority penalty (soft — only penalise when clear mismatch)
+    const seniorW=['senior','lead','principal','director','head','chief','vp']
+    const juniorW=['junior','graduate','entry level','trainee']
     const cvSenior=summaryWords.some(w=>seniorW.includes(w))
-    const cvJunior=summaryWords.some(w=>juniorW.includes(w))
+    const cvJunior=summaryWords.some(w=>juniorW.some(j=>j.includes(w)))
     let penalty=0
-    if(cvSenior&&juniorW.some(w=>title.includes(w))) penalty=12
+    if(cvSenior&&juniorW.some(w=>title.includes(w))) penalty=10
     if(cvJunior&&seniorW.some(w=>title.includes(w))) penalty=8
 
     // 4. Recency bonus
     const posted=job.posted_at?new Date(job.posted_at):null
-    const ageBonus=posted&&(Date.now()-posted.getTime())<14*24*3600*1000?5:0
+    const fresh=posted&&(Date.now()-posted.getTime())<14*24*3600*1000
+    const ageBonus=fresh?5:0
 
-    return Math.max(15, Math.min(99, Math.round(skillScore+titleScore+ageBonus-penalty)))
+    const final=Math.max(15, Math.min(99, Math.round(skillScore+titleScore+ageBonus-penalty)))
+    return final
   },[])
 
   const load=useCallback(async()=>{
@@ -982,6 +1113,7 @@ const TABS=[
   {id:'dashboard',label:'Dashboard',Icon:LayoutDashboard},
   {id:'jobs',label:'Jobs',Icon:Briefcase},
   {id:'jd',label:'JD Analyzer',Icon:Target},
+  {id:'editcv',label:'Edit CV',Icon:Edit3},
   {id:'bullets',label:'Bullets',Icon:TrendingUp},
   {id:'tracker',label:'Tracker',Icon:List},
   {id:'interview',label:'Interview',Icon:Mic},
@@ -1054,6 +1186,22 @@ export default function App() {
     if(oldProfile&&newVersion>1) setShowCompare(true)
   }
 
+  const handleCVSaved=(result)=>{
+    // Update profile in state and localStorage with re-analyzed data
+    const email=authUser?.email
+    const users=loadUsers()
+    const u=users[email]||{}
+    const updatedProfile={...result}
+    if(u.profiles?.length>0){
+      u.profiles[u.profiles.length-1]=updatedProfile
+    } else {
+      u.profiles=[updatedProfile]
+    }
+    users[email]=u
+    saveUsers(users)
+    setProfile(updatedProfile)
+  }
+
   const handleCreateApp=async(company,role,applyUrl,jdText)=>{
     if(!sessionId) throw new Error('Upload your CV first')
     await api.createApplication(sessionId,company,role,applyUrl,jdText)
@@ -1115,6 +1263,7 @@ export default function App() {
           {tab==='dashboard'&&<Dashboard profile={profile} applications={applications}/>}
           {tab==='jobs'&&<JobsBoard sessionId={sessionId} profile={profile} onCreateApp={handleCreateApp}/>}
           {tab==='jd'&&<JDAnalyzer sessionId={sessionId} onCreateApp={handleCreateApp}/>}
+          {tab==='editcv'&&<EditCV sessionId={sessionId} profile={profile} onSaved={handleCVSaved}/>}
           {tab==='bullets'&&<BulletRewriter profile={profile}/>}
           {tab==='tracker'&&<ApplicationsTracker sessionId={sessionId} applications={applications} onRefresh={loadApplications}/>}
           {tab==='interview'&&<InterviewPrep sessionId={sessionId} profile={profile}/>}
