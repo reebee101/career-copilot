@@ -400,9 +400,19 @@ function JDAnalyzer({ sessionId, onCreateApp }) {
 
   const analyze=async()=>{
     if(!jd.trim()) return
+    if(jd.trim().length < 100){
+      alert('Please paste a real job description (at least 100 characters). The more detail you provide, the more accurate the analysis.')
+      return
+    }
     setLoading(true);setResult(null);setCoverLetter('');setSaved(false)
     try { setResult(await api.scoreAgainstJD(sessionId,jd,company,role)) }
-    catch(e){ alert(e.message) }
+    catch(e){
+      if(e.message&&e.message.includes('Session not found')){
+        alert('Your session expired — please re-upload your CV using the "New CV" button in the sidebar.')
+      } else {
+        alert('JD analysis failed: '+e.message)
+      }
+    }
     finally { setLoading(false) }
   }
   const genCL=async()=>{
@@ -536,42 +546,45 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
   const scoreJob=useCallback((job,skills,profileSummary)=>{
     const title=(job.title||'').toLowerCase()
     const desc=(job.description_full||job.description||'').toLowerCase()
+    const jdFull=title+' '+desc
 
-    // No skills yet — show all jobs with a neutral score
-    if(!skills||skills.length===0) return 50
+    // No skills yet — neutral score so all jobs show
+    if(!skills||skills.length===0) return 55
 
-    // 1. Skill match — title hit worth 3x desc hit
-    let skillPoints=0, matchedSkills=0
-    skills.forEach(s=>{
-      const sl=s.toLowerCase().trim()
-      if(!sl||sl.length<2) return
-      if(title.includes(sl)){ skillPoints+=3; matchedSkills++ }
-      else if(desc.includes(sl)){ skillPoints+=1; matchedSkills++ }
+    // Normalise skills: split multi-word skills into tokens too
+    const skillTokens=[...new Set(
+      skills.flatMap(s=>s.toLowerCase().trim().split(/[\s/,+]+/)).filter(t=>t.length>1)
+    )]
+
+    // 1. Skill match — flexible: partial match counts
+    let titleHits=0, descHits=0
+    skillTokens.forEach(t=>{
+      if(title.includes(t)) titleHits++
+      else if(desc.includes(t)) descHits++
     })
-    const skillRatio=matchedSkills/Math.max(skills.length,1)
-    const skillScore=Math.min(55, Math.round(skillRatio*55 + Math.min(skillPoints,20)))
+    const total=Math.max(skillTokens.length,1)
+    const skillScore=Math.min(60, Math.round((titleHits*3+descHits)/total*40 + Math.min(titleHits*4,20)))
 
-    // 2. Title relevance vs CV summary
+    // 2. Title ↔ summary word overlap
     const summaryWords=(profileSummary||'').toLowerCase().split(/\W+/).filter(w=>w.length>3)
     const titleWords=title.split(/\W+/).filter(w=>w.length>3)
-    const titleOverlap=titleWords.filter(w=>summaryWords.some(sw=>sw.includes(w)||w.includes(sw))).length
-    const titleScore=Math.min(25, titleOverlap*8)
+    const overlap=titleWords.filter(w=>summaryWords.some(sw=>sw.includes(w)||w.includes(sw))).length
+    const titleScore=Math.min(30, overlap*10)
 
     // 3. Seniority alignment penalty
-    const seniorWords=['senior','lead','principal','director','head','chief','vp','manager']
-    const juniorWords=['junior','graduate','entry','intern','trainee','associate']
-    const cvSenior=summaryWords.some(w=>seniorWords.includes(w))
-    const cvJunior=summaryWords.some(w=>juniorWords.includes(w))
-    let seniorityPenalty=0
-    if(cvSenior&&juniorWords.some(w=>title.includes(w))) seniorityPenalty=15
-    if(cvJunior&&seniorWords.some(w=>title.includes(w))) seniorityPenalty=10
+    const seniorW=['senior','lead','principal','director','head','chief','vp','manager']
+    const juniorW=['junior','graduate','entry','intern','trainee','associate']
+    const cvSenior=summaryWords.some(w=>seniorW.includes(w))
+    const cvJunior=summaryWords.some(w=>juniorW.includes(w))
+    let penalty=0
+    if(cvSenior&&juniorW.some(w=>title.includes(w))) penalty=12
+    if(cvJunior&&seniorW.some(w=>title.includes(w))) penalty=8
 
     // 4. Recency bonus
     const posted=job.posted_at?new Date(job.posted_at):null
     const ageBonus=posted&&(Date.now()-posted.getTime())<14*24*3600*1000?5:0
 
-    // Ensure minimum 10 so nothing is hidden just because skills don't overlap perfectly
-    return Math.max(10, Math.min(99, Math.round(skillScore+titleScore+ageBonus-seniorityPenalty)))
+    return Math.max(15, Math.min(99, Math.round(skillScore+titleScore+ageBonus-penalty)))
   },[])
 
   const load=useCallback(async()=>{
@@ -585,11 +598,11 @@ function JobsBoard({ sessionId, profile, onCreateApp }) {
       const summary=profile?.analysis?.summary||''
       const scored=rawJobs
         .map(job=>({...job,match_score:scoreJob(job,skills,summary)}))
-        // Backend sets job.country = 'eg' | 'remote' | 'worldwide' — use it
+        // Backend sets job.country = 'eg' | 'remote' | 'worldwide'
         .filter(job=>{
-          if(region==='egypt') return job.country==='eg'||job.remote===true
+          if(region==='egypt') return job.country==='eg'  // strict: only Egypt jobs
           if(region==='remote') return job.remote===true
-          return true
+          return true  // worldwide: show all
         })
         // Show everything — let match score do the ranking, don't hide low-match jobs
         .sort((a,b)=>b.match_score-a.match_score)

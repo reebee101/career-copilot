@@ -53,8 +53,16 @@ def extract_cv_text(content: bytes, filename: str) -> str:
 
 
 async def analyze_cv(cv_text: str) -> dict:
-    system = """You are a senior career coach and ATS expert. Analyze the CV thoroughly.
+    system = """You are a strict, honest senior career coach and ATS expert. Analyze only what is actually written in the CV.
 This tool is used by professionals across ALL fields — Engineering, HR, Sales, Marketing, Finance, Operations, Design, Legal, Healthcare, Education, and more.
+
+CRITICAL RULES:
+- Only extract skills, experiences, and achievements that are EXPLICITLY stated in the CV. Do not invent or infer.
+- strengths must be based on real, specific content from the CV — not generic platitudes like "strong communicator".
+- critical_gaps must be realistic gaps for their field based on what is missing from the CV — do not fabricate skills.
+- rewritten_bullets must use the actual bullet points from the CV as the "original" — do not make up experience.
+- If a section of the CV is empty or missing, say so honestly rather than inventing content.
+
 Return a JSON object with EXACTLY these keys — no extras, no omissions:
 
 name (string)
@@ -93,20 +101,29 @@ recommended_projects (array of 3 objects): each has:
 
 
 async def score_cv_against_jd(cv_text: str, jd_text: str) -> dict:
-    system = """You are a recruitment expert. Analyze the CV against the job description.
-Return a JSON object with EXACTLY these keys:
+    system = """You are a strict, honest recruitment expert. Analyze the CV against the job description.
 
+CRITICAL RULES — follow exactly:
+- Only extract keywords that ACTUALLY appear in the job description. Do not invent keywords.
+- Only list matched_keywords that genuinely appear in BOTH the CV and the JD. Do not hallucinate matches.
+- missing_keywords must only include terms explicitly mentioned in the JD that are absent from the CV.
+- tailored_bullets must reference real experience from the CV reworded to match the JD — do not invent projects or achievements.
+- If the job description is vague, short, or nonsensical, set match_score to 0, verdict to "Invalid JD", and set application_strategy to "The job description provided does not contain enough information to perform a meaningful analysis. Please paste the full job description."
+- Do NOT fabricate an analysis for a poor-quality JD. Be honest.
+- application_strategy must name specific skills and experiences from THIS candidate's actual CV.
+
+Return a JSON object with EXACTLY these keys:
 match_score (integer 0-100)
-verdict (string, one of: "Strong Match", "Good Match", "Partial Match", "Weak Match")
-application_strategy (string, 2-3 sentences of specific advice for THIS candidate applying to THIS role)
-matched_keywords (array of strings)
-missing_keywords (array of strings)
-tailored_bullets (array of 3 strings, CV bullets rewritten specifically for this JD)
+verdict (string, one of: "Strong Match", "Good Match", "Partial Match", "Weak Match", "Invalid JD")
+application_strategy (string, 2-3 sentences citing specific CV content and specific JD requirements)
+matched_keywords (array of strings — only real overlaps between CV and JD)
+missing_keywords (array of strings — only terms explicitly in the JD, absent from CV)
+tailored_bullets (array of 3 strings — real CV experience reworded for this JD, no invented content)
 rewritten_cv_sections (object):
-  { "summary": "rewritten professional summary targeting this exact role",
-    "skills_to_highlight": [array of strings from their CV that match this JD],
-    "skills_to_add": [array of strings they should learn before applying] }
-recommendation (string, 2-3 concrete actionable sentences)"""
+  { "summary": "rewritten summary using only real CV content targeting this JD",
+    "skills_to_highlight": [strings from their actual CV that match this JD],
+    "skills_to_add": [strings explicitly required by JD that candidate lacks] }
+recommendation (string, 2-3 honest, specific, actionable sentences)"""
 
     return _chat_json([
         {"role": "system", "content": system},
