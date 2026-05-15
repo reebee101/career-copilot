@@ -4,7 +4,8 @@ from sqlalchemy import select
 from models.database import AsyncSessionLocal, JobPosting
 from services.job_service import (
     search_jobs_jsearch, search_jobs_remotive, search_jobs_arbeitnow,
-    search_jobs_wuzzuf, search_jobs_serpapi
+    search_jobs_wuzzuf, search_jobs_wuzzuf_api, search_jobs_himalayas,
+    search_jobs_serpapi
 )
 from config import get_settings
 from datetime import datetime
@@ -17,35 +18,43 @@ async def fetch_and_store_jobs(cv_skills: list[str] = None):
     print(f"[Scheduler] Fetching jobs | skills={cv_skills}")
     jobs = []
 
-    # 1. JSearch — Egypt-focused, real jobs from Indeed/LinkedIn/Glassdoor
+    # 1. JSearch — Egypt-focused (skip gracefully if rate limited)
     if settings.jsearch_api_key:
         jsearch = await search_jobs_jsearch(cv_skills)
         jobs.extend(jsearch)
         print(f"[Scheduler] JSearch: {len(jsearch)} jobs")
 
-    # 2. Wuzzuf — best Egypt source
-    wuzzuf = await search_jobs_wuzzuf(cv_skills)
-    jobs.extend(wuzzuf)
-    print(f"[Scheduler] Wuzzuf: {len(wuzzuf)} jobs")
+    # 2. Wuzzuf API — best Egypt source
+    wuzzuf_api = await search_jobs_wuzzuf_api(cv_skills)
+    jobs.extend(wuzzuf_api)
+    print(f"[Scheduler] Wuzzuf API: {len(wuzzuf_api)} jobs")
 
-    # 3. Remotive — remote worldwide jobs
+    # 3. Wuzzuf scraper — fallback
+    if len(wuzzuf_api) == 0:
+        wuzzuf = await search_jobs_wuzzuf(cv_skills)
+        jobs.extend(wuzzuf)
+        print(f"[Scheduler] Wuzzuf scraper: {len(wuzzuf)} jobs")
+
+    # 4. Remotive — remote worldwide
     remotive = await search_jobs_remotive(cv_skills)
     jobs.extend(remotive)
     print(f"[Scheduler] Remotive: {len(remotive)} jobs")
 
-    # 4. Arbeitnow — remote worldwide jobs
+    # 5. Arbeitnow — remote worldwide
     arbeitnow = await search_jobs_arbeitnow(cv_skills)
     jobs.extend(arbeitnow)
     print(f"[Scheduler] Arbeitnow: {len(arbeitnow)} jobs")
 
-    # 5. SerpAPI — Egypt-specific Google Jobs (if key set)
+    # 6. Himalayas — remote worldwide
+    himalayas = await search_jobs_himalayas(cv_skills)
+    jobs.extend(himalayas)
+    print(f"[Scheduler] Himalayas: {len(himalayas)} jobs")
+
+    # 7. SerpAPI — Egypt Google Jobs (if key set)
     if settings.serpapi_key:
         for kw in (cv_skills or ["engineer", "analyst"])[:2]:
             serp = await search_jobs_serpapi(f"{kw} Cairo Egypt")
             jobs.extend(serp)
-        print(f"[Scheduler] SerpAPI done")
-
-    # NOTE: Adzuna removed — only returns US/UK jobs, not relevant
 
     new_count = 0
     async with AsyncSessionLocal() as db:

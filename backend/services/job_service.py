@@ -393,3 +393,105 @@ async def search_jobs_jsearch(cv_skills: list[str] = None) -> list[dict]:
                 print(f"[JSearch] Error ('{query}'): {e}")
 
     return results
+
+
+# ── Himalayas (free, no key, remote-friendly) ─────────────────
+async def search_jobs_himalayas(cv_skills: list[str] = None) -> list[dict]:
+    """Himalayas.app free job API — remote & worldwide jobs."""
+    results = []
+    seen = set()
+    keywords = cv_skills[:3] if cv_skills else ["engineer", "analyst", "manager"]
+    try:
+        async with httpx.AsyncClient(timeout=20.0, headers=HEADERS) as client:
+            for kw in keywords[:3]:
+                try:
+                    resp = await client.get(
+                        "https://himalayas.app/jobs/api",
+                        params={"q": kw, "limit": 20}
+                    )
+                    if resp.status_code != 200:
+                        continue
+                    for job in resp.json().get("jobs", []):
+                        url = job.get("applicationUrl") or job.get("url", "")
+                        jid = str(job.get("id", abs(hash(url))))
+                        if jid in seen:
+                            continue
+                        seen.add(jid)
+                        loc = job.get("location") or "Remote – Worldwide"
+                        results.append({
+                            "external_id": f"himalayas_{jid}",
+                            "title": (job.get("title") or "").strip(),
+                            "company": (job.get("company", {}) or {}).get("name", "Company"),
+                            "location": loc,
+                            "description": re.sub(r'<[^>]+>', '', job.get("description") or "")[:800],
+                            "apply_url": url,
+                            "source": "himalayas",
+                            "salary_min": job.get("salaryMin"),
+                            "salary_max": job.get("salaryMax"),
+                            "remote": True,
+                            "posted_at": job.get("createdAt", datetime.utcnow().isoformat()),
+                            "country": "remote",
+                        })
+                except Exception as e:
+                    print(f"[Himalayas] Error ({kw}): {e}")
+    except Exception as e:
+        print(f"[Himalayas] Error: {e}")
+    print(f"[Himalayas] {len(results)} jobs")
+    return results
+
+
+# ── Wuzzuf via GraphQL API (more reliable than scraping) ───────
+async def search_jobs_wuzzuf_api(cv_skills: list[str] = None) -> list[dict]:
+    """Wuzzuf undocumented API — more reliable than HTML scraping."""
+    keywords = cv_skills[:4] if cv_skills else ["manager", "analyst", "engineer", "specialist"]
+    results = []
+    seen = set()
+
+    async with httpx.AsyncClient(timeout=25.0, headers={
+        **HEADERS,
+        "Referer": "https://wuzzuf.net/",
+        "Origin": "https://wuzzuf.net",
+    }, follow_redirects=True) as client:
+        for kw in keywords[:4]:
+            try:
+                resp = await client.get(
+                    "https://wuzzuf.net/api/search/job/posts",
+                    params={
+                        "filters[keywords][0]": kw,
+                        "filters[country][0]": "Egypt",
+                        "page": 0,
+                        "per_page": 15,
+                    }
+                )
+                if resp.status_code != 200:
+                    print(f"[Wuzzuf API] HTTP {resp.status_code} for '{kw}'")
+                    continue
+                data = resp.json()
+                for job in data.get("data", []):
+                    attrs = job.get("attributes", {})
+                    slug = attrs.get("slug", "")
+                    url = f"https://wuzzuf.net/jobs/p/{slug}" if slug else ""
+                    if not url or url in seen:
+                        continue
+                    seen.add(url)
+                    company = (attrs.get("company", {}) or {}).get("data", {}).get("attributes", {}).get("name", "Company")
+                    city = (attrs.get("city", {}) or {}).get("data", {}).get("attributes", {}).get("name", "Egypt")
+                    results.append({
+                        "external_id": f"wuzzuf_{abs(hash(url))}",
+                        "title": (attrs.get("title") or "").strip(),
+                        "company": company,
+                        "location": f"{city}, Egypt",
+                        "description": re.sub(r'<[^>]+>', '', attrs.get("description") or "")[:800],
+                        "apply_url": url,
+                        "source": "wuzzuf",
+                        "salary_min": None,
+                        "salary_max": None,
+                        "remote": "remote" in (attrs.get("title") or "").lower(),
+                        "posted_at": attrs.get("created_at", datetime.utcnow().isoformat()),
+                        "country": "eg",
+                    })
+            except Exception as e:
+                print(f"[Wuzzuf API] Error ({kw}): {e}")
+
+    print(f"[Wuzzuf API] {len(results)} jobs")
+    return results
