@@ -383,7 +383,7 @@ function EditCV({ sessionId, profile, onSaved }) {
           style={{
             width:'100%',
             minHeight:'65vh',
-            fontFamily:''DM Mono', 'Fira Code', 'Courier New', monospace',
+            fontFamily:"DM Mono, Fira Code, Courier New, monospace",
             fontSize:13,
             lineHeight:1.7,
             padding:'1rem',

@@ -112,3 +112,46 @@ async def interview_prep(req: InterviewPrepRequest, db: AsyncSession = Depends(g
 
     questions = await generate_interview_prep(profile.raw_text, req.role, req.company)
     return {"questions": questions}
+
+
+@router.get("/raw/{session_id}")
+async def get_raw_cv(session_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(CVProfile).where(CVProfile.session_id == session_id))
+    profile = result.scalar_one_or_none()
+    if not profile:
+        raise HTTPException(404, "Session not found.")
+    return {"session_id": session_id, "raw_text": profile.raw_text}
+
+
+class EditCVRequest(BaseModel):
+    session_id: str
+    raw_text: str
+
+
+@router.put("/edit")
+async def edit_cv(req: EditCVRequest, db: AsyncSession = Depends(get_db)):
+    if len(req.raw_text.strip()) < 100:
+        raise HTTPException(400, "CV text too short.")
+
+    result = await db.execute(select(CVProfile).where(CVProfile.session_id == req.session_id))
+    profile = result.scalar_one_or_none()
+    if not profile:
+        raise HTTPException(404, "Session not found.")
+
+    # Re-run full analysis on edited text
+    analysis = await analyze_cv(req.raw_text)
+
+    profile.raw_text = req.raw_text
+    profile.analysis = analysis
+    profile.ats_score = analysis.get("ats_score", 0)
+    profile.name = analysis.get("name", profile.name)
+
+    await db.commit()
+    await db.refresh(profile)
+
+    return {
+        "session_id": profile.session_id,
+        "name": profile.name,
+        "ats_score": profile.ats_score,
+        "analysis": analysis,
+    }
