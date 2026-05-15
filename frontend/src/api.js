@@ -88,6 +88,32 @@ export async function editCV(sessionId, rawText) {
   return r.json()
 }
 
+export function downloadCV(sessionId) {
+  window.open(`${BASE}/cv/download/${sessionId}`, '_blank')
+}
+
+export async function getCVVersions(sessionId) {
+  const r = await fetch(`${BASE}/cv/versions/${sessionId}`)
+  if (!r.ok) throw new Error('Failed to load CV versions')
+  return r.json()
+}
+
+export async function getCVVersionDetail(sessionId, versionId) {
+  const r = await fetch(`${BASE}/cv/versions/${sessionId}/${versionId}`)
+  if (!r.ok) throw new Error('Failed to load version details')
+  return r.json()
+}
+
+export function downloadCVVersion(sessionId, versionId) {
+  window.open(`${BASE}/cv/versions/${sessionId}/${versionId}/download`, '_blank')
+}
+
+export async function getCVAnalytics(sessionId) {
+  const r = await fetch(`${BASE}/cv/analytics/${sessionId}`)
+  if (!r.ok) throw new Error('Failed to load CV analytics')
+  return r.json()
+}
+
 export async function listApplications(sessionId) {
   const r = await fetch(`${BASE}/applications/?session_id=${sessionId}`)
   if (!r.ok) throw new Error('Failed to load applications')
@@ -104,11 +130,11 @@ export async function createApplication(sessionId, company, role, applyUrl = '',
   return r.json()
 }
 
-export async function updateApplicationStatus(appId, status, notes = '') {
+export async function updateApplicationStatus(appId, status, notes = '', rejection_reason = '', rejection_stage = '', rejection_feedback = '') {
   const r = await fetch(`${BASE}/applications/${appId}/status`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status, notes })
+    body: JSON.stringify({ status, notes, rejection_reason, rejection_stage, rejection_feedback })
   })
   if (!r.ok) throw new Error('Failed to update status')
   return r.json()
@@ -116,6 +142,12 @@ export async function updateApplicationStatus(appId, status, notes = '') {
 
 export async function deleteApplication(appId) {
   await fetch(`${BASE}/applications/${appId}`, { method: 'DELETE' })
+}
+
+export async function getRejectionInsights(sessionId) {
+  const r = await fetch(`${BASE}/applications/rejection-insights/${sessionId}`)
+  if (!r.ok) throw new Error('Failed to load rejection insights')
+  return r.json()
 }
 
 export async function triggerAutoApply(sessionId, applicationId, phone = '', linkedinUrl = '') {

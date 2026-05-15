@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, mapped_column, Mapped
 from sqlalchemy import String, Text, DateTime, Float, Boolean, JSON, Index
+from sqlalchemy.pool import NullPool
 from datetime import datetime
 from config import get_settings
 import logging
@@ -8,13 +9,15 @@ import logging
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-# Create engine with connection pooling
+# pool_size and max_overflow are not supported for SQLite (e.g. local dev fallback)
+_is_sqlite = settings.database_url.startswith("sqlite")
+
 engine = create_async_engine(
     settings.database_url,
     echo=False,
-    pool_pre_ping=True,  # Verify connections before using
-    pool_size=5,
-    max_overflow=10
+    pool_pre_ping=not _is_sqlite,
+    **({} if _is_sqlite else {"pool_size": 5, "max_overflow": 10}),
+    **({"poolclass": NullPool} if _is_sqlite else {}),
 )
 
 AsyncSessionLocal = sessionmaker(
@@ -42,6 +45,22 @@ class CVProfile(Base):
     ats_score: Mapped[float] = mapped_column(Float, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class CVVersion(Base):
+    __tablename__ = "cv_versions"
+    __table_args__ = (
+        Index('idx_version_session_created', 'session_id', 'created_at'),
+    )
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[str] = mapped_column(String(64), index=True)
+    version_number: Mapped[int] = mapped_column(default=1)
+    raw_text: Mapped[str] = mapped_column(Text, default="")
+    analysis: Mapped[dict] = mapped_column(JSON, default=dict)
+    ats_score: Mapped[float] = mapped_column(Float, default=0.0)
+    word_count: Mapped[int] = mapped_column(default=0)
+    change_summary: Mapped[str] = mapped_column(String(500), default="")  # What changed
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 class JobPosting(Base):
     __tablename__ = "job_postings"
@@ -87,6 +106,11 @@ class Application(Base):
     notes: Mapped[str] = mapped_column(Text, default="")
     auto_applied: Mapped[bool] = mapped_column(Boolean, default=False)
     applied_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    jd_text: Mapped[str] = mapped_column(Text, default="")  # Store JD for rejection analysis
+    rejection_reason: Mapped[str] = mapped_column(String(500), default="")  # User-provided reason
+    rejection_stage: Mapped[str] = mapped_column(String(100), default="")  # screening, interview, final, etc.
+    rejection_feedback: Mapped[str] = mapped_column(Text, default="")  # Any feedback received
+    ai_insights: Mapped[dict] = mapped_column(JSON, default=dict)  # AI-generated insights from rejection
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -112,7 +136,6 @@ class Project(Base):
     github_repo_name: Mapped[str] = mapped_column(String(200), default="")
     analysis: Mapped[dict] = mapped_column(JSON, default=dict)
     integrated_to_cv: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-    # User-provided metadata for better CV descriptions
     project_date: Mapped[str] = mapped_column(String(100), default="")
     is_team_project: Mapped[bool] = mapped_column(Boolean, default=False)
     team_size: Mapped[int] = mapped_column(nullable=True)

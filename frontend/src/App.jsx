@@ -3,7 +3,8 @@ import {
   Upload, LayoutDashboard, Search, FileText, List, Mic, Award,
   Zap, RefreshCw, ChevronRight, X, Check, AlertCircle, Loader,
   ExternalLink, Bot, Briefcase, TrendingUp, Target, Send,
-  PlusCircle, LogIn, LogOut, History, GitCompare, User, Lock, Sparkles, Edit3, Save
+  PlusCircle, LogIn, LogOut, History, GitCompare, User, Lock, Sparkles, Edit3, Save,
+  Download, Calendar, BarChart3, Activity
 } from 'lucide-react'
 import * as api from './api'
 
@@ -316,7 +317,11 @@ function EditCV({ sessionId, profile, onSaved }) {
   const [selectedText, setSelectedText] = useState('')
   const [aiRewrite, setAiRewrite] = useState(null)
   const [loadingRewrite, setLoadingRewrite] = useState(false)
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true)
   const textareaRef = useState(null)
+  const [fontFamily, setFontFamily] = useState('system')
+  const [fontSize, setFontSize] = useState(14)
+  const [lineHeight, setLineHeight] = useState(1.8)
 
   const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0
   const lineCount = text.split('\n').length
@@ -334,6 +339,34 @@ function EditCV({ sessionId, profile, onSaved }) {
     }
     load()
   }, [sessionId])
+
+  // Auto-save after 5 seconds of no typing
+  useEffect(() => {
+    if (!autoSaveEnabled || !hasChanges || text.length < 100) return
+    const timer = setTimeout(() => {
+      save()
+    }, 5000)
+    return () => clearTimeout(timer)
+  }, [text, autoSaveEnabled])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl/Cmd + S to save
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault()
+        if (hasChanges) save()
+      }
+      // Ctrl/Cmd + B to make selected text bold
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault()
+        const sel = window.getSelection()?.toString()
+        if (sel) setText(prev => prev.replace(sel, `**${sel}**`))
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [hasChanges, text])
 
   // Live AI suggestions — debounced, fires after 3s of no typing
   useEffect(() => {
@@ -486,11 +519,11 @@ CV context (for reference): ${text.slice(0, 500)}`
   )
 
   return (
-    <div style={{ display:'grid',gridTemplateColumns:'1fr 340px',gap:12,alignItems:'start' }}>
+    <div style={{ display:'grid',gridTemplateColumns:'1fr 380px',gap:16,alignItems:'start',height:'calc(100vh - 180px)' }}>
       {/* LEFT — editor */}
-      <div>
+      <div style={{ display:'flex',flexDirection:'column',height:'100%' }}>
         {/* Header */}
-        <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10 }}>
+        <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,flexWrap:'wrap',gap:8 }}>
           <div style={{ display:'flex',gap:6 }}>
             {['edit','suggestions','diff'].map(t => (
               <button key={t} onClick={() => setActiveTab(t)}
@@ -499,11 +532,16 @@ CV context (for reference): ${text.slice(0, 500)}`
               </button>
             ))}
           </div>
-          <div style={{ display:'flex',gap:8,alignItems:'center' }}>
+          <div style={{ display:'flex',gap:8,alignItems:'center',flexWrap:'wrap' }}>
+            <label style={{ display:'flex',alignItems:'center',gap:6,fontSize:11,color:'var(--text-secondary)',cursor:'pointer' }}>
+              <input type="checkbox" checked={autoSaveEnabled} onChange={e => setAutoSaveEnabled(e.target.checked)} style={{ cursor:'pointer' }} />
+              Auto-save
+            </label>
+            <span style={{ fontSize:11,color:'var(--text-tertiary)',padding:'2px 6px',background:'var(--border-light)',borderRadius:4 }}>⌘S to save</span>
             <span style={{ fontSize:12,color:'var(--text-tertiary)' }}>{wordCount} words · {lineCount} lines</span>
-            {hasChanges && <span style={{ fontSize:11,color:'var(--amber)',fontWeight:500 }}>● Unsaved changes</span>}
+            {hasChanges && <span style={{ fontSize:11,color:'var(--amber)',fontWeight:500 }}>● Unsaved</span>}
             <button className="btn btn-primary btn-sm" onClick={save} disabled={saving||!hasChanges}>
-              {saving?<><Spinner/> Saving…</>:saved?<><Check size={13}/> Saved!</>:<><Save size={13}/> Save & re-score</>}
+              {saving?<><Spinner/> Saving…</>:saved?<><Check size={13}/> Saved!</>:<><Save size={13}/> Save</>}
             </button>
           </div>
         </div>
@@ -523,7 +561,7 @@ CV context (for reference): ${text.slice(0, 500)}`
 
         {/* Editor */}
         {activeTab==='edit' && (
-          <div>
+          <div style={{ flex:1,display:'flex',flexDirection:'column',minHeight:0 }}>
             {/* Editor chrome */}
             <div style={{
               border:'1.5px solid var(--border)',
@@ -531,13 +569,17 @@ CV context (for reference): ${text.slice(0, 500)}`
               overflow:'hidden',
               boxShadow:'0 2px 12px rgba(196,84,122,0.07)',
               background:'white',
+              display:'flex',
+              flexDirection:'column',
+              height:'100%',
             }}>
               {/* Editor toolbar */}
               <div style={{
-                display:'flex',alignItems:'center',gap:6,
+                display:'flex',alignItems:'center',gap:8,
                 padding:'8px 12px',
                 background:'var(--surface-pink)',
                 borderBottom:'1px solid var(--border)',
+                flexWrap:'wrap',
               }}>
                 {/* Fake traffic lights */}
                 <div style={{ display:'flex',gap:5,marginRight:6 }}>
@@ -545,25 +587,78 @@ CV context (for reference): ${text.slice(0, 500)}`
                     <div key={i} style={{ width:11,height:11,borderRadius:'50%',background:c,opacity:0.8 }}/>
                   ))}
                 </div>
-                <div style={{ flex:1,textAlign:'center',fontSize:11,color:'var(--text-tertiary)',fontWeight:500 }}>
-                  CV Editor — {wordCount} words
-                </div>
-                <div style={{ display:'flex',gap:3 }}>
-                  {['B','I','U'].map((f,i) => (
-                    <button key={i} style={{ width:22,height:22,border:'none',background:'transparent',borderRadius:4,fontSize:12,fontWeight:i===0?700:400,fontStyle:i===1?'italic':'normal',textDecoration:i===2?'underline':'none',cursor:'pointer',color:'var(--text-secondary)',display:'flex',alignItems:'center',justifyContent:'center' }} title={['Bold','Italic','Underline'][i]}>
-                      {f}
-                    </button>
-                  ))}
-                  <div style={{ width:1,background:'var(--border)',margin:'2px 4px' }}/>
-                  <button onClick={() => setText(prev => prev.split('\n').map(l => l.startsWith('• ') ? l : l.trim() ? '• '+l : l).join('\n'))}
-                    style={{ height:22,padding:'0 6px',border:'none',background:'transparent',borderRadius:4,fontSize:11,cursor:'pointer',color:'var(--text-secondary)' }} title="Add bullets">
-                    ≡
+                
+                {/* Font selector */}
+                <select value={fontFamily} onChange={e=>setFontFamily(e.target.value)}
+                  style={{ fontSize:11,padding:'3px 6px',border:'1px solid var(--border)',borderRadius:4,background:'white',cursor:'pointer' }}>
+                  <option value="system">System</option>
+                  <option value="serif">Serif</option>
+                  <option value="mono">Monospace</option>
+                  <option value="arial">Arial</option>
+                  <option value="times">Times New Roman</option>
+                  <option value="georgia">Georgia</option>
+                  <option value="courier">Courier</option>
+                </select>
+                
+                {/* Font size */}
+                <select value={fontSize} onChange={e=>setFontSize(Number(e.target.value))}
+                  style={{ fontSize:11,padding:'3px 6px',border:'1px solid var(--border)',borderRadius:4,background:'white',cursor:'pointer',width:55 }}>
+                  {[12,13,14,15,16,18].map(s=><option key={s} value={s}>{s}px</option>)}
+                </select>
+                
+                {/* Line height */}
+                <select value={lineHeight} onChange={e=>setLineHeight(Number(e.target.value))}
+                  style={{ fontSize:11,padding:'3px 6px',border:'1px solid var(--border)',borderRadius:4,background:'white',cursor:'pointer',width:50 }}>
+                  {[1.4,1.6,1.8,2.0,2.2].map(h=><option key={h} value={h}>{h}</option>)}
+                </select>
+                
+                <div style={{ width:1,background:'var(--border)',height:20 }}/>
+                
+                {/* Formatting buttons */}
+                <div style={{ display:'flex',gap:2 }}>
+                  <button onClick={()=>{const sel=window.getSelection()?.toString();if(sel)setText(prev=>prev.replace(sel,`**${sel}**`))}}
+                    style={{ width:24,height:24,border:'none',background:'transparent',borderRadius:4,fontSize:12,fontWeight:700,cursor:'pointer',color:'var(--text-secondary)' }} title="Bold (Ctrl+B)">
+                    B
                   </button>
+                  <button onClick={()=>{const sel=window.getSelection()?.toString();if(sel)setText(prev=>prev.replace(sel,`*${sel}*`))}}
+                    style={{ width:24,height:24,border:'none',background:'transparent',borderRadius:4,fontSize:12,fontStyle:'italic',cursor:'pointer',color:'var(--text-secondary)' }} title="Italic">
+                    I
+                  </button>
+                  <button onClick={()=>setText(prev=>prev.split('\n').map(l=>l.startsWith('• ')?l:l.trim()?'• '+l:l).join('\n'))}
+                    style={{ height:24,padding:'0 8px',border:'none',background:'transparent',borderRadius:4,fontSize:11,cursor:'pointer',color:'var(--text-secondary)' }} title="Add bullets">
+                    • List
+                  </button>
+                  <button onClick={()=>setText(prev=>prev.split('\n').map((l,i)=>l.match(/^\d+\./)?l:l.trim()?`${i+1}. ${l}`:l).join('\n'))}
+                    style={{ height:24,padding:'0 8px',border:'none',background:'transparent',borderRadius:4,fontSize:11,cursor:'pointer',color:'var(--text-secondary)' }} title="Numbered list">
+                    1. List
+                  </button>
+                </div>
+                
+                <div style={{ width:1,background:'var(--border)',height:20 }}/>
+                
+                {/* Smart formatting */}
+                <div style={{ display:'flex',gap:2 }}>
+                  <button onClick={()=>setText(prev=>prev.split('\n').map(l=>l.trim()).join('\n'))}
+                    style={{ height:24,padding:'0 8px',border:'none',background:'transparent',borderRadius:4,fontSize:10,cursor:'pointer',color:'var(--text-secondary)' }} title="Remove extra spaces">
+                    Trim
+                  </button>
+                  <button onClick={()=>setText(prev=>prev.split('\n').map(l=>l.replace(/\s+/g,' ').trim()).join('\n'))}
+                    style={{ height:24,padding:'0 8px',border:'none',background:'transparent',borderRadius:4,fontSize:10,cursor:'pointer',color:'var(--text-secondary)' }} title="Fix spacing">
+                    Fix Spaces
+                  </button>
+                  <button onClick={()=>setText(prev=>prev.split('\n').map(l=>l.trim()?l.charAt(0).toUpperCase()+l.slice(1):l).join('\n'))}
+                    style={{ height:24,padding:'0 8px',border:'none',background:'transparent',borderRadius:4,fontSize:10,cursor:'pointer',color:'var(--text-secondary)' }} title="Capitalize lines">
+                    Caps
+                  </button>
+                </div>
+                
+                <div style={{ flex:1,textAlign:'center',fontSize:11,color:'var(--text-tertiary)',fontWeight:500,minWidth:100 }}>
+                  {wordCount} words
                 </div>
               </div>
 
               {/* Line numbers + textarea */}
-              <div style={{ display:'flex',position:'relative' }}>
+              <div style={{ display:'flex',position:'relative',flex:1,minHeight:0,overflow:'hidden' }}>
                 {/* Line numbers */}
                 <div style={{
                   width:44,
@@ -573,7 +668,8 @@ CV context (for reference): ${text.slice(0, 500)}`
                   textAlign:'right',
                   userSelect:'none',
                   flexShrink:0,
-                  overflowY:'hidden',
+                  overflowY:'auto',
+                  overflowX:'hidden',
                 }}>
                   {text.split('\n').map((_,i) => (
                     <div key={i} style={{ fontSize:11,lineHeight:'1.8',paddingRight:8,color:'var(--text-tertiary)',fontFamily:'monospace' }}>
@@ -588,19 +684,33 @@ CV context (for reference): ${text.slice(0, 500)}`
                   onChange={e => setText(e.target.value)}
                   onMouseUp={() => setSelectedText(window.getSelection()?.toString() || '')}
                   onKeyUp={() => setSelectedText(window.getSelection()?.toString() || '')}
+                  onScroll={e => {
+                    const lineNumbers = e.target.previousElementSibling
+                    if (lineNumbers) lineNumbers.scrollTop = e.target.scrollTop
+                  }}
                   style={{
                     flex:1,
-                    minHeight:'68vh',
-                    fontFamily:"'DM Sans', system-ui, sans-serif",
-                    fontSize:14,
-                    lineHeight:1.8,
+                    height:'100%',
+                    fontFamily: fontFamily==='system'?"'DM Sans', system-ui, sans-serif":
+                               fontFamily==='serif'?"Georgia, 'Times New Roman', serif":
+                               fontFamily==='mono'?"'Courier New', monospace":
+                               fontFamily==='arial'?"Arial, sans-serif":
+                               fontFamily==='times'?"'Times New Roman', serif":
+                               fontFamily==='georgia'?"Georgia, serif":
+                               fontFamily==='courier'?"'Courier New', monospace":
+                               "'DM Sans', system-ui, sans-serif",
+                    fontSize,
+                    lineHeight,
                     padding:'14px 16px',
                     border:'none',
                     outline:'none',
                     background:'white',
                     color:'var(--text)',
                     resize:'none',
-                    letterSpacing:'0.01em',
+                    letterSpacing: fontFamily==='mono'?'0':'0.01em',
+                    overflowY:'auto',
+                    whiteSpace:'pre-wrap',
+                    wordWrap:'break-word',
                   }}
                   spellCheck={true}
                   placeholder="Start typing your CV or paste it here…"
@@ -707,9 +817,9 @@ CV context (for reference): ${text.slice(0, 500)}`
       </div>
 
       {/* RIGHT — sidebar */}
-      <div style={{ display:'flex',flexDirection:'column',gap:10 }}>
+      <div style={{ display:'flex',flexDirection:'column',gap:10,overflowY:'auto',height:'100%',paddingRight:4 }}>
         {/* Score card */}
-        <div className="card" style={{ textAlign:'center',padding:'1.25rem' }}>
+        <div className="card" style={{ textAlign:'center',padding:'1.25rem',position:'sticky',top:0,zIndex:10,background:'white' }}>
           <div style={{ fontSize:11,fontWeight:600,color:'var(--text-tertiary)',textTransform:'uppercase',marginBottom:8 }}>Current ATS Score</div>
           <ScoreRing score={newScore ?? oldScore} size={80} />
           {scoreDelta !== null && (
@@ -1214,8 +1324,26 @@ function ApplicationsTracker({ sessionId, applications, onRefresh }) {
   const [showAdd,setShowAdd]=useState(false)
   const [manualForm,setManualForm]=useState({company:'',role:'',apply_url:'',notes:''})
   const [addingManual,setAddingManual]=useState(false)
+  const [showRejectionInsights,setShowRejectionInsights]=useState(false)
+  const [rejectionInsights,setRejectionInsights]=useState(null)
+  const [loadingInsights,setLoadingInsights]=useState(false)
 
-  const updateStatus=async(appId,status)=>{ try{await api.updateApplicationStatus(appId,status);onRefresh()}catch(e){alert(e.message)} }
+  const updateStatus=async(appId,status,rejectionData={})=>{
+    try{
+      await api.updateApplicationStatus(appId,status,rejectionData.rejection_reason||'',rejectionData.rejection_stage||'',rejectionData.rejection_feedback||'')
+      onRefresh()
+    }catch(e){alert(e.message)}
+  }
+  
+  const loadRejectionInsights=async()=>{
+    setLoadingInsights(true)
+    try{
+      const insights=await api.getRejectionInsights(sessionId)
+      setRejectionInsights(insights)
+      setShowRejectionInsights(true)
+    }catch(e){alert(e.message)}
+    finally{setLoadingInsights(false)}
+  }
   const deleteApp=async(appId)=>{ if(!confirm('Delete?'))return; try{await api.deleteApplication(appId);onRefresh()}catch(e){alert(e.message)} }
   const doAutoApply=async(appId)=>{
     setApplying(appId)
@@ -1235,10 +1363,17 @@ function ApplicationsTracker({ sessionId, applications, onRefresh }) {
   const byStatus=Object.fromEntries(cols.map(c=>[c,applications.filter(a=>a.status===c)]))
   const colColors={saved:'var(--accent2)',applied:'var(--amber)',interview:'var(--lavender)',offer:'var(--success)',rejected:'var(--coral)'}
 
+  const rejectedCount=applications.filter(a=>a.status==='rejected').length
+  
   return (
     <div>
-      <div style={{ display:'flex',justifyContent:'flex-end',marginBottom:10 }}>
-        <button className="btn btn-primary btn-sm" onClick={()=>setShowAdd(true)}><PlusCircle size={13}/> Add manually</button>
+      <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10 }}>
+        {rejectedCount>0&&(
+          <button className="btn btn-secondary btn-sm" onClick={loadRejectionInsights} disabled={loadingInsights}>
+            {loadingInsights?<><Spinner/> Loading…</>:<><TrendingUp size={13}/> Learn from {rejectedCount} rejection{rejectedCount>1?'s':''}</>}
+          </button>
+        )}
+        <button className="btn btn-primary btn-sm" style={{marginLeft:'auto'}} onClick={()=>setShowAdd(true)}><PlusCircle size={13}/> Add manually</button>
       </div>
       <div style={{ display:'flex',gap:8,overflowX:'auto',paddingBottom:4 }}>
         {cols.map(col=>(
@@ -1326,6 +1461,120 @@ function ApplicationsTracker({ sessionId, applications, onRefresh }) {
               <div style={{ display:'flex',flexWrap:'wrap',gap:5 }}>{selectedApp.missing_keywords.map((k,i)=><span key={i} className="badge badge-coral">{k}</span>)}</div></>
             )}
             {selectedApp.apply_url&&<a href={selectedApp.apply_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm" style={{ marginTop:14,display:'inline-flex' }}><ExternalLink size={12}/> Open application</a>}
+          </div>
+        </div>
+      )}
+
+      {/* Rejection Insights Modal */}
+      {showRejectionInsights&&rejectionInsights&&(
+        <div style={{ position:'fixed',inset:0,background:'rgba(45,26,36,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999,padding:'1rem' }}>
+          <div className="card" style={{ maxWidth:800,width:'100%',maxHeight:'90vh',overflowY:'auto',padding:'1.5rem' }}>
+            <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.25rem' }}>
+              <div style={{ display:'flex',alignItems:'center',gap:8 }}>
+                <TrendingUp size={20} color="var(--coral)" />
+                <div style={{ fontWeight:700,fontSize:16 }}>Learn from Rejections</div>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setShowRejectionInsights(false)}><X size={14}/></button>
+            </div>
+
+            {rejectionInsights.total_rejections===0?(
+              <div style={{ textAlign:'center',padding:'3rem',color:'var(--text-secondary)' }}>
+                No rejections yet. Keep applying!
+              </div>
+            ):(
+              <>
+                {/* Summary Stats */}
+                <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:12,marginBottom:'1.5rem' }}>
+                  <div style={{ textAlign:'center',padding:12,background:'var(--coral-light)',borderRadius:'var(--radius)',border:'1px solid #F5D0CD' }}>
+                    <div style={{ fontSize:11,color:'var(--text-secondary)',marginBottom:4 }}>Total Rejections</div>
+                    <div style={{ fontSize:28,fontWeight:700,color:'var(--coral)' }}>{rejectionInsights.total_rejections}</div>
+                  </div>
+                  <div style={{ textAlign:'center',padding:12,background:'var(--surface-pink)',borderRadius:'var(--radius)',border:'1px solid var(--border)' }}>
+                    <div style={{ fontSize:11,color:'var(--text-secondary)',marginBottom:4 }}>Avg Match Score</div>
+                    <div style={{ fontSize:28,fontWeight:700,color:'var(--text)' }}>{rejectionInsights.patterns.avg_match_score}%</div>
+                  </div>
+                  <div style={{ textAlign:'center',padding:12,background:'var(--surface-pink)',borderRadius:'var(--radius)',border:'1px solid var(--border)' }}>
+                    <div style={{ fontSize:11,color:'var(--text-secondary)',marginBottom:4 }}>Avg CV Score</div>
+                    <div style={{ fontSize:28,fontWeight:700,color:'var(--text)' }}>{rejectionInsights.patterns.avg_cv_score}</div>
+                  </div>
+                </div>
+
+                {/* Key Insights */}
+                {rejectionInsights.insights.length>0&&(
+                  <div style={{ marginBottom:'1.5rem' }}>
+                    <div style={{ fontWeight:600,marginBottom:12,fontSize:14 }}>🔍 Key Insights</div>
+                    {rejectionInsights.insights.map((insight,i)=>(
+                      <div key={i} className="card" style={{ marginBottom:8,borderLeft:`3px solid ${insight.severity==='critical'?'var(--coral)':insight.severity==='high'?'var(--amber)':'var(--accent2)'}` }}>
+                        <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:4 }}>
+                          <span className={`badge ${insight.severity==='critical'?'badge-coral':insight.severity==='high'?'badge-amber':'badge-blue'}`}>{insight.severity}</span>
+                          <div style={{ fontWeight:600,fontSize:13 }}>{insight.title}</div>
+                        </div>
+                        <div style={{ fontSize:13,color:'var(--text-secondary)',marginBottom:6 }}>{insight.description}</div>
+                        <div style={{ fontSize:13,color:'var(--accent)',fontWeight:500 }}>💡 {insight.recommendation}</div>
+                        {insight.keywords&&(
+                          <div style={{ marginTop:8,display:'flex',flexWrap:'wrap',gap:5 }}>
+                            {insight.keywords.map((kw,j)=><span key={j} className="badge badge-pink">{kw}</span>)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Patterns */}
+                {Object.keys(rejectionInsights.patterns.stages).length>0&&(
+                  <div style={{ marginBottom:'1.5rem' }}>
+                    <div style={{ fontWeight:600,marginBottom:12,fontSize:14 }}>📊 Rejection Stages</div>
+                    <div className="card">
+                      {Object.entries(rejectionInsights.patterns.stages).map(([stage,count])=>(
+                        <div key={stage} style={{ display:'flex',alignItems:'center',gap:12,marginBottom:8 }}>
+                          <div style={{ flex:1,fontSize:13,textTransform:'capitalize' }}>{stage.replace('_',' ')}</div>
+                          <div style={{ flex:2,height:24,background:'var(--border-light)',borderRadius:4,overflow:'hidden',position:'relative' }}>
+                            <div style={{ width:`${(count/rejectionInsights.total_rejections)*100}%`,height:'100%',background:'var(--coral)',borderRadius:4 }} />
+                            <span style={{ position:'absolute',right:8,top:3,fontSize:11,fontWeight:600,color:'var(--text)' }}>{count}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Top Missing Keywords */}
+                {rejectionInsights.patterns.top_missing_keywords.length>0&&(
+                  <div style={{ marginBottom:'1.5rem' }}>
+                    <div style={{ fontWeight:600,marginBottom:12,fontSize:14 }}>🎯 Most Frequently Missing Keywords</div>
+                    <div className="card">
+                      <div style={{ display:'flex',flexWrap:'wrap',gap:8 }}>
+                        {rejectionInsights.patterns.top_missing_keywords.slice(0,15).map((item,i)=>(
+                          <div key={i} style={{ padding:'6px 12px',background:'var(--coral-light)',borderRadius:20,fontSize:12,border:'1px solid #F5D0CD' }}>
+                            <strong>{item.keyword}</strong> <span style={{ color:'var(--text-secondary)' }}>×{item.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Recommendations */}
+                {rejectionInsights.recommendations.length>0&&(
+                  <div style={{ marginBottom:'1rem' }}>
+                    <div style={{ fontWeight:600,marginBottom:12,fontSize:14 }}>✨ Action Plan</div>
+                    <div className="card" style={{ background:'var(--accent2-light)',border:'1px solid var(--border-blue)' }}>
+                      {rejectionInsights.recommendations.map((rec,i)=>(
+                        <div key={i} style={{ display:'flex',gap:8,marginBottom:i<rejectionInsights.recommendations.length-1?10:0 }}>
+                          <div style={{ width:24,height:24,background:'var(--accent2)',color:'white',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,flexShrink:0 }}>{i+1}</div>
+                          <div style={{ fontSize:13,color:'var(--accent2-dark)',lineHeight:1.6 }}>{rec}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <button className="btn btn-primary" style={{ width:'100%',justifyContent:'center' }} onClick={()=>setShowRejectionInsights(false)}>
+                  <Check size={14}/> Got it — let's improve!
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1470,6 +1719,252 @@ function BulletRewriter({ profile }) {
   )
 }
 
+// ── CV ANALYTICS DASHBOARD ────────────────────────────────────
+function CVAnalytics({ sessionId }) {
+  const [analytics, setAnalytics] = useState(null)
+  const [versions, setVersions] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [selectedVersion, setSelectedVersion] = useState(null)
+  const [versionDetail, setVersionDetail] = useState(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
+
+  useEffect(() => {
+    loadAnalytics()
+  }, [sessionId])
+
+  const loadAnalytics = async () => {
+    if (!sessionId) return
+    setLoading(true)
+    try {
+      const [analyticsData, versionsData] = await Promise.all([
+        api.getCVAnalytics(sessionId),
+        api.getCVVersions(sessionId)
+      ])
+      setAnalytics(analyticsData)
+      setVersions(versionsData.versions || [])
+    } catch (e) {
+      console.error('Failed to load analytics:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const viewVersion = async (versionId) => {
+    setLoadingDetail(true)
+    try {
+      const detail = await api.getCVVersionDetail(sessionId, versionId)
+      setVersionDetail(detail)
+      setSelectedVersion(versionId)
+    } catch (e) {
+      alert(e.message)
+    } finally {
+      setLoadingDetail(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '3rem' }}>
+        <Spinner /> <div style={{ marginTop: 8, color: 'var(--text-secondary)' }}>Loading analytics...</div>
+      </div>
+    )
+  }
+
+  if (!analytics) {
+    return (
+      <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+        No version history available yet. Edit your CV to create versions.
+      </div>
+    )
+  }
+
+  const summary = analytics.summary
+  const charts = analytics.charts
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          <BarChart3 size={24} color="var(--accent)" />
+          <h2 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>CV Version History & Analytics</h2>
+        </div>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>
+          Track your CV improvements over time with detailed metrics and comparisons
+        </p>
+      </div>
+
+      {/* Summary Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginBottom: '1.5rem' }}>
+        <div className="card" style={{ background: 'linear-gradient(135deg, var(--accent-light), white)', border: '1px solid var(--accent)' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Current ATS Score</div>
+          <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>{summary.current_ats_score}</div>
+          <div style={{ fontSize: 13, color: summary.ats_improvement >= 0 ? 'var(--success)' : 'var(--coral)' }}>
+            {summary.ats_improvement >= 0 ? '↑' : '↓'} {Math.abs(summary.ats_improvement)} points from v1
+          </div>
+        </div>
+
+        <div className="card">
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Total Versions</div>
+          <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>{summary.total_versions}</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            <Calendar size={12} style={{ display: 'inline', marginRight: 4 }} />
+            Since {new Date(summary.first_version_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          </div>
+        </div>
+
+        <div className="card">
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Word Count</div>
+          <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>{summary.current_word_count}</div>
+          <div style={{ fontSize: 13, color: summary.word_count_change >= 0 ? 'var(--success)' : 'var(--coral)' }}>
+            {summary.word_count_change >= 0 ? '+' : ''}{summary.word_count_change} words from v1
+          </div>
+        </div>
+
+        <div className="card">
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Skills Tracked</div>
+          <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>{summary.current_skills_count}</div>
+          <div style={{ fontSize: 13, color: summary.skills_added >= 0 ? 'var(--success)' : 'var(--coral)' }}>
+            {summary.skills_added >= 0 ? '+' : ''}{summary.skills_added} skills from v1
+          </div>
+        </div>
+      </div>
+
+      {/* Charts */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginBottom: '1.5rem' }}>
+        {/* ATS Score Chart */}
+        <div className="card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <Activity size={16} color="var(--accent)" />
+            <div style={{ fontWeight: 600, fontSize: 14 }}>ATS Score Progress</div>
+          </div>
+          <div style={{ height: 180, display: 'flex', alignItems: 'flex-end', gap: 8, padding: '0 8px' }}>
+            {charts.ats_scores.map((item, i) => {
+              const maxScore = Math.max(...charts.ats_scores.map(s => s.score))
+              const height = (item.score / maxScore) * 100
+              const color = item.score >= 80 ? 'var(--success)' : item.score >= 60 ? 'var(--amber)' : 'var(--coral)'
+              return (
+                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)' }}>{item.score}</div>
+                  <div style={{ width: '100%', height: `${height}%`, background: color, borderRadius: '4px 4px 0 0', minHeight: 20, transition: 'all 0.3s' }} />
+                  <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>v{item.version}</div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Word Count Chart */}
+        <div className="card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <FileText size={16} color="var(--accent2)" />
+            <div style={{ fontWeight: 600, fontSize: 14 }}>Word Count Trend</div>
+          </div>
+          <div style={{ height: 180, display: 'flex', alignItems: 'flex-end', gap: 8, padding: '0 8px' }}>
+            {charts.word_counts.map((item, i) => {
+              const maxCount = Math.max(...charts.word_counts.map(w => w.count))
+              const height = (item.count / maxCount) * 100
+              return (
+                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)' }}>{item.count}</div>
+                  <div style={{ width: '100%', height: `${height}%`, background: 'var(--accent2)', borderRadius: '4px 4px 0 0', minHeight: 20, transition: 'all 0.3s' }} />
+                  <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>v{item.version}</div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Timeline */}
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <History size={16} color="var(--accent)" />
+          <div style={{ fontWeight: 600, fontSize: 14 }}>Version Timeline</div>
+        </div>
+        <div style={{ position: 'relative', paddingLeft: 24 }}>
+          {/* Timeline line */}
+          <div style={{ position: 'absolute', left: 8, top: 8, bottom: 8, width: 2, background: 'var(--border)' }} />
+          
+          {analytics.timeline.slice().reverse().map((item, i) => (
+            <div key={i} style={{ position: 'relative', marginBottom: 16, paddingBottom: 16, borderBottom: i < analytics.timeline.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+              {/* Timeline dot */}
+              <div style={{ position: 'absolute', left: -20, top: 4, width: 12, height: 12, borderRadius: '50%', background: 'var(--accent)', border: '2px solid white', boxShadow: '0 0 0 2px var(--accent-light)' }} />
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>Version {item.version}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                  {new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>{item.change || 'CV updated'}</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => viewVersion(versions.find(v => v.version_number === item.version)?.id)}>
+                  <FileText size={12} /> View
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => api.downloadCVVersion(sessionId, versions.find(v => v.version_number === item.version)?.id)}>
+                  <Download size={12} /> Download
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Version Detail Modal */}
+      {selectedVersion && versionDetail && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,26,36,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999, padding: '1rem' }}>
+          <div className="card" style={{ maxWidth: 700, width: '100%', maxHeight: '90vh', overflow: 'auto', padding: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', position: 'sticky', top: 0, background: 'white', paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <FileText size={18} color="var(--accent)" />
+                <div style={{ fontWeight: 700, fontSize: 15 }}>Version {versionDetail.version_number}</div>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedVersion(null); setVersionDetail(null) }}>
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Version Stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
+              <div style={{ textAlign: 'center', padding: 12, background: 'var(--surface-pink)', borderRadius: 'var(--radius)' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>ATS Score</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent)' }}>{versionDetail.ats_score}</div>
+              </div>
+              <div style={{ textAlign: 'center', padding: 12, background: 'var(--surface-pink)', borderRadius: 'var(--radius)' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Words</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text)' }}>{versionDetail.word_count}</div>
+              </div>
+              <div style={{ textAlign: 'center', padding: 12, background: 'var(--surface-pink)', borderRadius: 'var(--radius)' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Skills</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text)' }}>{versionDetail.analysis?.skills?.length || 0}</div>
+              </div>
+            </div>
+
+            {/* CV Text */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>CV Content</div>
+              <div style={{ padding: 12, background: 'var(--border-light)', borderRadius: 'var(--radius)', fontSize: 13, fontFamily: 'monospace', whiteSpace: 'pre-wrap', maxHeight: 300, overflow: 'auto', border: '1px solid var(--border)' }}>
+                {versionDetail.raw_text}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" onClick={() => api.downloadCVVersion(sessionId, selectedVersion)} style={{ flex: 1, justifyContent: 'center' }}>
+                <Download size={14} /> Download This Version
+              </button>
+              <button className="btn btn-ghost" onClick={() => { setSelectedVersion(null); setVersionDetail(null) }}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── PROJECTS ──────────────────────────────────────────────────
 function Projects({ sessionId, profile, onCVUpdated }) {
   const [projects, setProjects] = useState([])
@@ -1529,12 +2024,12 @@ function Projects({ sessionId, profile, onCVUpdated }) {
     setError('')
     try {
       const result = await api.uploadProject(selectedFile, sessionId, metadata)
-      setProjects([result, ...projects])
-      setSelectedProject(result)
+      // Reload projects to get the complete data
+      await loadProjects()
       setShowMetadataForm(false)
       setSelectedFile(null)
       setMetadata({ project_date: '', is_team_project: false, team_size: '', your_role: '' })
-      alert('Project analyzed successfully! You can now create a GitHub repo or add it to your CV.')
+      // No alert - the project will now be displayed in the list with action buttons
     } catch (e) {
       setError(e.message)
     } finally {
@@ -1574,7 +2069,13 @@ function Projects({ sessionId, profile, onCVUpdated }) {
     setIntegrating(true)
     try {
       const result = await api.integrateProjectToCV(sessionId, projectId)
-      alert(`Project added to CV!\nATS Score: ${result.ats_score}/100 (${result.ats_score_change >= 0 ? '+' : ''}${result.ats_score_change} change)`)
+      const scoreChange = result.ats_score_change >= 0 ? `+${result.ats_score_change}` : result.ats_score_change
+      
+      // Show success message with download option
+      if (confirm(`✅ Project added to CV!\n\nNew ATS Score: ${result.ats_score}/100 (${scoreChange} change)\n\nWould you like to download your updated CV now?`)) {
+        api.downloadCV(sessionId)
+      }
+      
       await loadProjects()
       if (onCVUpdated) onCVUpdated(result)
     } catch (e) {
@@ -1815,13 +2316,14 @@ function Projects({ sessionId, profile, onCVUpdated }) {
             </div>
 
             <div style={{ marginBottom: 12 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 8 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 8, padding: '4px 0' }}>
                 <input
                   type="checkbox"
                   checked={metadata.is_team_project}
                   onChange={(e) => setMetadata({ ...metadata, is_team_project: e.target.checked })}
+                  style={{ margin: 0 }}
                 />
-                <span style={{ fontSize: 13, fontWeight: 500 }}>This was a team project</span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', lineHeight: 1 }}>This was a team project</span>
               </label>
               {metadata.is_team_project && (
                 <input
@@ -1910,6 +2412,7 @@ function Projects({ sessionId, profile, onCVUpdated }) {
 // ── ROOT APP ──────────────────────────────────────────────────
 const TABS=[
   {id:'dashboard',label:'Dashboard',Icon:LayoutDashboard},
+  {id:'analytics',label:'CV Analytics',Icon:BarChart3},
   {id:'jobs',label:'Jobs',Icon:Briefcase},
   {id:'jd',label:'JD Analyzer',Icon:Target},
   {id:'projects',label:'Projects',Icon:Upload},
@@ -2061,6 +2564,7 @@ export default function App() {
       <div style={{ flex:1,overflow:'auto',padding:'1.25rem' }}>
         <div style={{ maxWidth:1100,margin:'0 auto' }}>
           {tab==='dashboard'&&<Dashboard profile={profile} applications={applications}/>}
+          {tab==='analytics'&&<CVAnalytics sessionId={sessionId}/>}
           {tab==='jobs'&&<JobsBoard sessionId={sessionId} profile={profile} onCreateApp={handleCreateApp}/>}
           {tab==='jd'&&<JDAnalyzer sessionId={sessionId} onCreateApp={handleCreateApp}/>}
           {tab==='projects'&&<Projects sessionId={sessionId} profile={profile} onCVUpdated={handleCVSaved}/>}

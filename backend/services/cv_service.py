@@ -40,16 +40,72 @@ def _chat_text(prompt: str, max_tokens: int = 800) -> str:
 
 
 def extract_cv_text(content: bytes, filename: str) -> str:
+    """Enhanced CV text extraction with better formatting preservation."""
     lower = filename.lower()
+    
     if lower.endswith(".pdf"):
         import fitz
         doc = fitz.open(stream=content, filetype="pdf")
-        return "\n".join(page.get_text() for page in doc)
+        text_parts = []
+        
+        for page in doc:
+            # Extract text with layout preservation
+            text = page.get_text("text")
+            
+            # Clean up common PDF artifacts
+            text = text.replace('\x00', '')  # Remove null bytes
+            text = text.replace('\uf0b7', '•')  # Fix bullet points
+            text = text.replace('\u2022', '•')  # Normalize bullets
+            text = text.replace('\u2013', '-')  # En dash to hyphen
+            text = text.replace('\u2014', '-')  # Em dash to hyphen
+            
+            # Remove excessive whitespace while preserving structure
+            lines = text.split('\n')
+            cleaned_lines = []
+            for line in lines:
+                line = ' '.join(line.split())  # Normalize spaces
+                if line.strip():  # Only keep non-empty lines
+                    cleaned_lines.append(line)
+            
+            text_parts.append('\n'.join(cleaned_lines))
+        
+        doc.close()
+        return '\n\n'.join(text_parts)
+    
     if lower.endswith((".docx", ".doc")):
         from docx import Document
         doc = Document(io.BytesIO(content))
-        return "\n".join(p.text for p in doc.paragraphs)
-    return content.decode("utf-8", errors="ignore")
+        text_parts = []
+        
+        for paragraph in doc.paragraphs:
+            text = paragraph.text.strip()
+            if text:
+                # Preserve bullet points
+                if paragraph.style.name.startswith('List'):
+                    text = '• ' + text if not text.startswith('•') else text
+                text_parts.append(text)
+        
+        # Also extract text from tables
+        for table in doc.tables:
+            for row in table.rows:
+                row_text = ' | '.join(cell.text.strip() for cell in row.cells if cell.text.strip())
+                if row_text:
+                    text_parts.append(row_text)
+        
+        return '\n'.join(text_parts)
+    
+    # Plain text files
+    text = content.decode("utf-8", errors="ignore")
+    
+    # Clean up common issues
+    text = text.replace('\r\n', '\n')  # Normalize line endings
+    text = text.replace('\r', '\n')
+    
+    # Remove excessive blank lines (more than 2 consecutive)
+    while '\n\n\n' in text:
+        text = text.replace('\n\n\n', '\n\n')
+    
+    return text.strip()
 
 
 async def analyze_cv(cv_text: str) -> dict:

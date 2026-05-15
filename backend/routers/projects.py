@@ -66,6 +66,30 @@ async def upload_project(
         # Analyze project
         analysis = await extract_and_analyze_project(content, file.filename)
         
+        # Normalize data types (AI sometimes returns wrong types)
+        def normalize_string(value):
+            """Ensure value is a string."""
+            if isinstance(value, dict):
+                return value.get('description', '') or str(value)
+            return str(value) if value else ""
+        
+        def normalize_list(value):
+            """Ensure value is a list of strings."""
+            if not value:
+                return []
+            if isinstance(value, str):
+                return [value]
+            if isinstance(value, list):
+                result = []
+                for item in value:
+                    if isinstance(item, dict):
+                        # Extract 'point' or first string value from dict
+                        result.append(item.get('point', '') or item.get('bullet', '') or str(item))
+                    else:
+                        result.append(str(item))
+                return result
+            return [str(value)]
+        
         # Store in database
         # Enhance analysis with user context if provided
         if your_role or project_date or is_team_project:
@@ -81,13 +105,13 @@ async def upload_project(
             from services.project_service import _chat_json
             enhanced_prompt = f"""Given this project analysis and user context, regenerate the CV bullet points to be more specific and personalized.
 
-Original analysis: {analysis.get('cv_description', '')}
+Original analysis: {normalize_string(analysis.get('cv_description', ''))}
 
 {context}
 
 Return JSON with:
-- cv_description: Updated 2-3 sentence description incorporating the user's specific role
-- bullet_points: Array of 3-5 CV bullets highlighting what THIS person specifically did, with metrics
+- cv_description: STRING - Updated 2-3 sentence description incorporating the user's specific role
+- bullet_points: ARRAY OF STRINGS - 3-5 CV bullets highlighting what THIS person specifically did, with metrics
 
 Focus on their individual contributions, not generic project features."""
             
@@ -102,13 +126,13 @@ Focus on their individual contributions, not generic project features."""
             session_id=session_id,
             project_name=analysis.get("project_name", "Untitled Project"),
             project_type=analysis.get("project_type", ""),
-            tech_stack=analysis.get("tech_stack", []),
+            tech_stack=normalize_list(analysis.get("tech_stack", [])),
             complexity=analysis.get("complexity", ""),
-            cv_description=analysis.get("cv_description", ""),
-            bullet_points=analysis.get("bullet_points", []),
-            key_features=analysis.get("key_features", []),
-            technical_highlights=analysis.get("technical_highlights", []),
-            keywords=analysis.get("keywords", []),
+            cv_description=normalize_string(analysis.get("cv_description", "")),
+            bullet_points=normalize_list(analysis.get("bullet_points", [])),
+            key_features=normalize_list(analysis.get("key_features", [])),
+            technical_highlights=normalize_list(analysis.get("technical_highlights", [])),
+            keywords=normalize_list(analysis.get("keywords", [])),
             analysis=analysis,
             project_date=project_date,
             is_team_project=is_team_project,
