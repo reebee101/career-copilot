@@ -95,6 +95,62 @@ async def search_jobs_arbeitnow(cv_skills: list[str] = None) -> list[dict]:
     return results
 
 
+
+# ── LinkedIn Jobs via RapidAPI ────────────────────────────────
+async def search_jobs_linkedin(cv_skills: list[str] = None) -> list[dict]:
+    """LinkedIn Jobs API on RapidAPI — Egypt-focused, separate quota from JSearch."""
+    if not settings.jsearch_api_key:
+        return []
+    headers = {
+        "X-RapidAPI-Key": settings.jsearch_api_key,
+        "X-RapidAPI-Host": "linkedin-jobs-search.p.rapidapi.com",
+    }
+    keywords = cv_skills[:3] if cv_skills else ["manager", "analyst", "engineer"]
+    results = []
+    seen = set()
+
+    async with httpx.AsyncClient(timeout=20.0, headers=headers) as client:
+        for kw in keywords[:3]:
+            for location in ["Egypt", "Cairo"]:
+                try:
+                    resp = await client.post(
+                        "https://linkedin-jobs-search.p.rapidapi.com/",
+                        json={"search_terms": kw, "location": location, "page": "1"}
+                    )
+                    if resp.status_code == 429:
+                        print(f"[LinkedIn] Rate limited")
+                        continue
+                    if resp.status_code != 200:
+                        print(f"[LinkedIn] HTTP {resp.status_code}")
+                        continue
+                    data = resp.json()
+                    jobs = data if isinstance(data, list) else data.get("jobs", [])
+                    for job in jobs:
+                        url = job.get("linkedin_job_url_cleaned") or job.get("job_url", "")
+                        jid = str(job.get("job_id") or abs(hash(url)))
+                        if jid in seen or not url:
+                            continue
+                        seen.add(jid)
+                        results.append({
+                            "external_id": f"linkedin_{jid}",
+                            "title": (job.get("job_title") or "").strip(),
+                            "company": (job.get("company_name") or "Company").strip(),
+                            "location": job.get("job_location") or location,
+                            "description": (job.get("job_description") or "")[:800],
+                            "apply_url": url,
+                            "source": "linkedin",
+                            "salary_min": None,
+                            "salary_max": None,
+                            "remote": "remote" in (job.get("job_location") or "").lower(),
+                            "posted_at": job.get("posted_date", datetime.utcnow().isoformat()),
+                            "country": "eg",
+                        })
+                except Exception as e:
+                    print(f"[LinkedIn] Error: {e}")
+
+    print(f"[LinkedIn] {len(results)} jobs")
+    return results
+
 # ── Wuzzuf scraper (best-effort) ───────────────────────────────
 
 async def search_jobs_wuzzuf(cv_skills: list[str] = None) -> list[dict]:

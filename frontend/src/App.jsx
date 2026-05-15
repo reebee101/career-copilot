@@ -300,13 +300,27 @@ function CVCompareModal({ oldProfile, newProfile, cvHistory, onClose }) {
 }
 
 // ── EDIT CV ───────────────────────────────────────────────────
+// ── AI CV EDITOR ──────────────────────────────────────────────
 function EditCV({ sessionId, profile, onSaved }) {
   const [text, setText] = useState('')
+  const [originalText, setOriginalText] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
-  const [charCount, setCharCount] = useState(0)
+  const [newScore, setNewScore] = useState(null)
+  const [aiSuggestions, setAiSuggestions] = useState([])
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
+  const [activeTab, setActiveTab] = useState('edit') // edit | suggestions | diff
+  const [fixingIdx, setFixingIdx] = useState(null)
+  const [selectedText, setSelectedText] = useState('')
+  const [aiRewrite, setAiRewrite] = useState(null)
+  const [loadingRewrite, setLoadingRewrite] = useState(false)
+  const textareaRef = useState(null)
+
+  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0
+  const lineCount = text.split('\n').length
+  const oldScore = profile?.ats_score || 0
 
   useEffect(() => {
     const load = async () => {
@@ -314,33 +328,156 @@ function EditCV({ sessionId, profile, onSaved }) {
       try {
         const r = await api.getRawCV(sessionId)
         setText(r.raw_text || '')
-        setCharCount((r.raw_text || '').length)
-      } catch(e) {
-        setError(e.message)
-      } finally {
-        setLoading(false)
-      }
+        setOriginalText(r.raw_text || '')
+      } catch(e) { setError(e.message) }
+      finally { setLoading(false) }
     }
     load()
   }, [sessionId])
 
-  const save = async () => {
-    if (text.trim().length < 100) {
-      setError('CV text is too short (min 100 characters).')
-      return
+  // Live AI suggestions — debounced, fires after 3s of no typing
+  useEffect(() => {
+    if (!text || text === originalText || text.length < 200) return
+    const timer = setTimeout(() => getSuggestions(), 3000)
+    return () => clearTimeout(timer)
+  }, [text])
+
+  const getSuggestions = async () => {
+    setLoadingSuggestions(true)
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [{
+            role: 'user',
+            content: `You are an expert CV coach. Analyze this CV and return a JSON array of exactly 5 specific, actionable improvement suggestions.
+
+Each suggestion must be a JSON object with:
+- "type": one of "bullet", "missing_section", "keyword", "quantify", "format"  
+- "severity": "critical" | "important" | "nice_to_have"
+- "title": short title (5 words max)
+- "issue": what is wrong (1 sentence)
+- "fix": exact text to add or change (be specific, give example)
+- "section": which part of CV this applies to
+
+Return ONLY a JSON array, no markdown, no explanation.
+
+CV:
+${text.slice(0, 3000)}`
+          }]
+        })
+      })
+      const data = await resp.json()
+      const raw = data.content?.[0]?.text || '[]'
+      const clean = raw.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, '').trim()
+      setAiSuggestions(JSON.parse(clean))
+    } catch(e) { console.error('Suggestions error:', e) }
+    finally { setLoadingSuggestions(false) }
+  }
+
+  const applySuggestion = async (suggestion, idx) => {
+    setFixingIdx(idx)
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 2000,
+          messages: [{
+            role: 'user',
+            content: `Apply this specific improvement to the CV below. Return ONLY the complete improved CV text, no explanation, no markdown.
+
+Improvement to apply:
+Section: ${suggestion.section}
+Issue: ${suggestion.issue}
+Fix: ${suggestion.fix}
+
+CV:
+${text}`
+          }]
+        })
+      })
+      const data = await resp.json()
+      const improved = data.content?.[0]?.text || text
+      setText(improved)
+      setAiSuggestions(prev => prev.filter((_, i) => i !== idx))
+      setActiveTab('edit')
+    } catch(e) { alert('Failed to apply fix: ' + e.message) }
+    finally { setFixingIdx(null) }
+  }
+
+  const rewriteSelected = async () => {
+    const sel = window.getSelection()?.toString() || selectedText
+    if (!sel || sel.length < 20) { alert('Select at least one bullet point or sentence to rewrite.'); return }
+    setLoadingRewrite(true); setAiRewrite(null)
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 500,
+          messages: [{
+            role: 'user',
+            content: `Rewrite this CV bullet/sentence to be stronger: add action verb, quantify impact, show business value. Return ONLY the rewritten text, nothing else.
+
+Original: "${sel}"
+
+CV context (for reference): ${text.slice(0, 500)}`
+          }]
+        })
+      })
+      const data = await resp.json()
+      setAiRewrite({ original: sel, improved: data.content?.[0]?.text?.trim() || sel })
+    } catch(e) { alert('Rewrite failed: ' + e.message) }
+    finally { setLoadingRewrite(false) }
+  }
+
+  const applyRewrite = () => {
+    if (!aiRewrite) return
+    setText(prev => prev.replace(aiRewrite.original, aiRewrite.improved))
+    setAiRewrite(null)
+  }
+
+  const getDiff = () => {
+    const oldLines = originalText.split('\n')
+    const newLines = text.split('\n')
+    const result = []
+    const maxLen = Math.max(oldLines.length, newLines.length)
+    for (let i = 0; i < maxLen; i++) {
+      const o = oldLines[i] ?? ''
+      const n = newLines[i] ?? ''
+      if (o === n) result.push({ type: 'same', text: n })
+      else if (!o) result.push({ type: 'added', text: n })
+      else if (!n) result.push({ type: 'removed', text: o })
+      else { result.push({ type: 'removed', text: o }); result.push({ type: 'added', text: n }) }
     }
-    setSaving(true); setError(''); setSaved(false)
+    return result
+  }
+
+  const save = async () => {
+    if (text.trim().length < 100) { setError('CV text is too short.'); return }
+    setSaving(true); setError(''); setSaved(false); setNewScore(null)
     try {
       const result = await api.editCV(sessionId, text)
+      setNewScore(result.ats_score)
       setSaved(true)
+      setOriginalText(text)
       onSaved(result)
-      setTimeout(() => setSaved(false), 3000)
-    } catch(e) {
-      setError(e.message)
-    } finally {
-      setSaving(false)
-    }
+    } catch(e) { setError(e.message) }
+    finally { setSaving(false) }
   }
+
+  const scoreDelta = newScore !== null ? newScore - oldScore : null
+  const hasChanges = text !== originalText
+
+  const sevColor = { critical: 'var(--coral)', important: 'var(--amber)', nice_to_have: 'var(--accent2)' }
+  const sevBg = { critical: 'var(--coral-light)', important: 'var(--amber-light)', nice_to_have: 'var(--accent2-light)' }
+  const typeIcon = { bullet: '•', missing_section: '📋', keyword: '🔑', quantify: '📊', format: '📐' }
 
   if (loading) return (
     <div style={{ display:'flex',alignItems:'center',justifyContent:'center',padding:'4rem',gap:10,color:'var(--text-secondary)' }}>
@@ -349,61 +486,286 @@ function EditCV({ sessionId, profile, onSaved }) {
   )
 
   return (
-    <div>
-      <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12 }}>
-        <div>
-          <div style={{ fontWeight:700,fontSize:16 }}>Edit your CV</div>
-          <div style={{ fontSize:13,color:'var(--text-secondary)',marginTop:2 }}>
-            Edit the text below and click Save — your ATS score will be recalculated instantly.
+    <div style={{ display:'grid',gridTemplateColumns:'1fr 340px',gap:12,alignItems:'start' }}>
+      {/* LEFT — editor */}
+      <div>
+        {/* Header */}
+        <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10 }}>
+          <div style={{ display:'flex',gap:6 }}>
+            {['edit','suggestions','diff'].map(t => (
+              <button key={t} onClick={() => setActiveTab(t)}
+                style={{ padding:'5px 14px',borderRadius:20,border:activeTab===t?'1.5px solid var(--accent)':`1.5px solid var(--border)`,background:activeTab===t?'var(--accent-light)':'transparent',color:activeTab===t?'var(--accent)':'var(--text-secondary)',fontSize:12,fontWeight:activeTab===t?600:400,cursor:'pointer',textTransform:'capitalize' }}>
+                {t}{t==='suggestions'&&aiSuggestions.length>0?` (${aiSuggestions.length})`:''}
+              </button>
+            ))}
+          </div>
+          <div style={{ display:'flex',gap:8,alignItems:'center' }}>
+            <span style={{ fontSize:12,color:'var(--text-tertiary)' }}>{wordCount} words · {lineCount} lines</span>
+            {hasChanges && <span style={{ fontSize:11,color:'var(--amber)',fontWeight:500 }}>● Unsaved changes</span>}
+            <button className="btn btn-primary btn-sm" onClick={save} disabled={saving||!hasChanges}>
+              {saving?<><Spinner/> Saving…</>:saved?<><Check size={13}/> Saved!</>:<><Save size={13}/> Save & re-score</>}
+            </button>
           </div>
         </div>
-        <div style={{ display:'flex',gap:8,alignItems:'center' }}>
-          <span style={{ fontSize:12,color:'var(--text-tertiary)' }}>{charCount.toLocaleString()} chars</span>
-          <button className="btn btn-primary" onClick={save} disabled={saving}>
-            {saving ? <><Spinner /> Re-analyzing…</> : saved ? <><Check size={14}/> Saved!</> : <><Save size={14}/> Save & re-score</>}
-          </button>
-        </div>
+
+        {/* Score delta after save */}
+        {saved && scoreDelta !== null && (
+          <div style={{ display:'flex',gap:10,alignItems:'center',padding:'10px 14px',background:scoreDelta>=0?'var(--success-light)':'var(--coral-light)',borderRadius:'var(--radius-sm)',marginBottom:10,border:`1px solid ${scoreDelta>=0?'#C5E8D6':'#F5D0CD'}`,fontSize:13 }}>
+            <span style={{ fontSize:18,fontWeight:700,color:scoreDelta>=0?'var(--success)':'var(--coral)' }}>{scoreDelta>=0?'+':''}{scoreDelta}</span>
+            <span style={{ color:'var(--text)' }}>ATS score {scoreDelta>=0?'improved':'changed'}: <strong>{oldScore}</strong> → <strong>{newScore}</strong>/100</span>
+          </div>
+        )}
+        {error && (
+          <div style={{ display:'flex',gap:8,alignItems:'center',padding:'9px 12px',background:'var(--coral-light)',borderRadius:'var(--radius-sm)',marginBottom:10,border:'1px solid #F5D0CD',fontSize:13,color:'var(--coral)' }}>
+            <AlertCircle size={13}/> {error}
+          </div>
+        )}
+
+        {/* Editor */}
+        {activeTab==='edit' && (
+          <div>
+            {/* Editor chrome */}
+            <div style={{
+              border:'1.5px solid var(--border)',
+              borderRadius:'var(--radius)',
+              overflow:'hidden',
+              boxShadow:'0 2px 12px rgba(196,84,122,0.07)',
+              background:'white',
+            }}>
+              {/* Editor toolbar */}
+              <div style={{
+                display:'flex',alignItems:'center',gap:6,
+                padding:'8px 12px',
+                background:'var(--surface-pink)',
+                borderBottom:'1px solid var(--border)',
+              }}>
+                {/* Fake traffic lights */}
+                <div style={{ display:'flex',gap:5,marginRight:6 }}>
+                  {['#FF5F57','#FFBD2E','#28C840'].map((c,i) => (
+                    <div key={i} style={{ width:11,height:11,borderRadius:'50%',background:c,opacity:0.8 }}/>
+                  ))}
+                </div>
+                <div style={{ flex:1,textAlign:'center',fontSize:11,color:'var(--text-tertiary)',fontWeight:500 }}>
+                  CV Editor — {wordCount} words
+                </div>
+                <div style={{ display:'flex',gap:3 }}>
+                  {['B','I','U'].map((f,i) => (
+                    <button key={i} style={{ width:22,height:22,border:'none',background:'transparent',borderRadius:4,fontSize:12,fontWeight:i===0?700:400,fontStyle:i===1?'italic':'normal',textDecoration:i===2?'underline':'none',cursor:'pointer',color:'var(--text-secondary)',display:'flex',alignItems:'center',justifyContent:'center' }} title={['Bold','Italic','Underline'][i]}>
+                      {f}
+                    </button>
+                  ))}
+                  <div style={{ width:1,background:'var(--border)',margin:'2px 4px' }}/>
+                  <button onClick={() => setText(prev => prev.split('\n').map(l => l.startsWith('• ') ? l : l.trim() ? '• '+l : l).join('\n'))}
+                    style={{ height:22,padding:'0 6px',border:'none',background:'transparent',borderRadius:4,fontSize:11,cursor:'pointer',color:'var(--text-secondary)' }} title="Add bullets">
+                    ≡
+                  </button>
+                </div>
+              </div>
+
+              {/* Line numbers + textarea */}
+              <div style={{ display:'flex',position:'relative' }}>
+                {/* Line numbers */}
+                <div style={{
+                  width:44,
+                  padding:'14px 0',
+                  background:'var(--surface-pink)',
+                  borderRight:'1px solid var(--border-light)',
+                  textAlign:'right',
+                  userSelect:'none',
+                  flexShrink:0,
+                  overflowY:'hidden',
+                }}>
+                  {text.split('\n').map((_,i) => (
+                    <div key={i} style={{ fontSize:11,lineHeight:'1.8',paddingRight:8,color:'var(--text-tertiary)',fontFamily:'monospace' }}>
+                      {i+1}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Actual textarea */}
+                <textarea
+                  value={text}
+                  onChange={e => setText(e.target.value)}
+                  onMouseUp={() => setSelectedText(window.getSelection()?.toString() || '')}
+                  onKeyUp={() => setSelectedText(window.getSelection()?.toString() || '')}
+                  style={{
+                    flex:1,
+                    minHeight:'68vh',
+                    fontFamily:"'DM Sans', system-ui, sans-serif",
+                    fontSize:14,
+                    lineHeight:1.8,
+                    padding:'14px 16px',
+                    border:'none',
+                    outline:'none',
+                    background:'white',
+                    color:'var(--text)',
+                    resize:'none',
+                    letterSpacing:'0.01em',
+                  }}
+                  spellCheck={true}
+                  placeholder="Start typing your CV or paste it here…"
+                />
+              </div>
+
+              {/* Status bar */}
+              <div style={{
+                display:'flex',alignItems:'center',justifyContent:'space-between',
+                padding:'5px 14px',
+                background:'var(--surface-pink)',
+                borderTop:'1px solid var(--border-light)',
+                fontSize:11,
+                color:'var(--text-tertiary)',
+              }}>
+                <div style={{ display:'flex',gap:14 }}>
+                  <span>{wordCount} words</span>
+                  <span>{lineCount} lines</span>
+                  <span>{text.length.toLocaleString()} chars</span>
+                </div>
+                <div style={{ display:'flex',gap:8,alignItems:'center' }}>
+                  {selectedText.length > 0 && <span style={{ color:'var(--accent)' }}>{selectedText.split(/\s+/).filter(Boolean).length} words selected</span>}
+                  {hasChanges ? <span style={{ color:'var(--amber)',fontWeight:500 }}>● Unsaved</span> : <span style={{ color:'var(--success)' }}>✓ Saved</span>}
+                </div>
+              </div>
+            </div>
+            {/* Rewrite panel */}
+            {selectedText.length >= 20 && (
+              <div style={{ marginTop:8,padding:'10px 14px',background:'var(--accent-light)',borderRadius:'var(--radius-sm)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10 }}>
+                <div style={{ fontSize:12,color:'var(--accent-dark)' }}>
+                  <strong>Selected:</strong> "{selectedText.slice(0,60)}{selectedText.length>60?'…':''}"
+                </div>
+                <button className="btn btn-primary btn-sm" onClick={rewriteSelected} disabled={loadingRewrite}>
+                  {loadingRewrite?<><Spinner/> Rewriting…</>:<><Sparkles size={12}/> AI Rewrite</>}
+                </button>
+              </div>
+            )}
+            {aiRewrite && (
+              <div style={{ marginTop:8,padding:'14px',background:'white',borderRadius:'var(--radius)',border:'1.5px solid var(--accent)' }}>
+                <div style={{ fontSize:12,fontWeight:600,color:'var(--text-tertiary)',marginBottom:6 }}>BEFORE</div>
+                <div style={{ fontSize:13,color:'var(--text-secondary)',padding:'8px',background:'var(--border-light)',borderRadius:'var(--radius-sm)',marginBottom:10,borderLeft:'2px solid var(--border)' }}>{aiRewrite.original}</div>
+                <div style={{ fontSize:12,fontWeight:600,color:'var(--accent)',marginBottom:6 }}>AI REWRITE</div>
+                <div style={{ fontSize:13,padding:'8px',background:'var(--accent-light)',borderRadius:'var(--radius-sm)',borderLeft:'2px solid var(--accent)',marginBottom:10 }}>{aiRewrite.improved}</div>
+                <div style={{ display:'flex',gap:8 }}>
+                  <button className="btn btn-primary btn-sm" onClick={applyRewrite}><Check size={12}/> Apply</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setAiRewrite(null)}><X size={12}/> Dismiss</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Suggestions tab */}
+        {activeTab==='suggestions' && (
+          <div>
+            {loadingSuggestions && (
+              <div style={{ display:'flex',gap:8,alignItems:'center',padding:'1rem',color:'var(--text-secondary)',fontSize:13 }}>
+                <Spinner/> AI is analyzing your CV changes…
+              </div>
+            )}
+            {!loadingSuggestions && aiSuggestions.length===0 && (
+              <div style={{ textAlign:'center',padding:'3rem' }}>
+                <div style={{ color:'var(--text-secondary)',marginBottom:12 }}>Make some edits first — AI suggestions appear automatically after 3 seconds of no typing.</div>
+                <button className="btn btn-secondary" onClick={getSuggestions}><Sparkles size={14}/> Analyze now</button>
+              </div>
+            )}
+            {aiSuggestions.map((s, i) => (
+              <div key={i} className="card" style={{ marginBottom:8,borderLeft:`3px solid ${sevColor[s.severity]||'var(--border)'}` }}>
+                <div style={{ display:'flex',gap:8,alignItems:'flex-start',justifyContent:'space-between' }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:'flex',gap:6,alignItems:'center',marginBottom:6 }}>
+                      <span style={{ fontSize:14 }}>{typeIcon[s.type]||'✏️'}</span>
+                      <span style={{ fontWeight:600,fontSize:13 }}>{s.title}</span>
+                      <span className="badge" style={{ background:sevBg[s.severity],color:sevColor[s.severity],fontSize:10 }}>{s.severity}</span>
+                      {s.section && <span style={{ fontSize:11,color:'var(--text-tertiary)' }}>{s.section}</span>}
+                    </div>
+                    <div style={{ fontSize:13,color:'var(--text-secondary)',marginBottom:6 }}>{s.issue}</div>
+                    <div style={{ fontSize:13,padding:'7px 10px',background:'var(--accent-light)',borderRadius:'var(--radius-sm)',borderLeft:'2px solid var(--accent)',fontStyle:'italic' }}>
+                      💡 {s.fix}
+                    </div>
+                  </div>
+                  <button className="btn btn-primary btn-sm" onClick={() => applySuggestion(s, i)} disabled={fixingIdx===i} style={{ flexShrink:0,marginTop:2 }}>
+                    {fixingIdx===i?<><Spinner/> Fixing…</>:<><Zap size={12}/> Auto-fix</>}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Diff tab */}
+        {activeTab==='diff' && (
+          <div className="card" style={{ fontFamily:"'DM Mono',monospace",fontSize:12,lineHeight:1.8,maxHeight:'70vh',overflowY:'auto',background:'white' }}>
+            {!hasChanges
+              ? <div style={{ color:'var(--text-secondary)',textAlign:'center',padding:'2rem' }}>No changes yet — edit your CV to see what changed.</div>
+              : getDiff().map((line, i) => (
+                <div key={i} style={{ padding:'1px 8px',background:line.type==='added'?'#E6F5EE':line.type==='removed'?'#FDECEA':'transparent',color:line.type==='added'?'#1A6040':line.type==='removed'?'#7A2A22':'var(--text)',borderLeft:`3px solid ${line.type==='added'?'#5DAF8B':line.type==='removed'?'#D4726A':'transparent'}` }}>
+                  {line.type==='added'?'+':line.type==='removed'?'-':' '} {line.text}
+                </div>
+              ))
+            }
+          </div>
+        )}
       </div>
 
-      {saved && (
-        <div style={{ display:'flex',gap:8,alignItems:'center',padding:'10px 14px',background:'var(--success-light)',borderRadius:'var(--radius-sm)',marginBottom:10,border:'1px solid #C5E8D6',fontSize:13,color:'var(--success)' }}>
-          <Check size={14}/> CV saved and re-scored! Check your Dashboard for the updated ATS score.
+      {/* RIGHT — sidebar */}
+      <div style={{ display:'flex',flexDirection:'column',gap:10 }}>
+        {/* Score card */}
+        <div className="card" style={{ textAlign:'center',padding:'1.25rem' }}>
+          <div style={{ fontSize:11,fontWeight:600,color:'var(--text-tertiary)',textTransform:'uppercase',marginBottom:8 }}>Current ATS Score</div>
+          <ScoreRing score={newScore ?? oldScore} size={80} />
+          {scoreDelta !== null && (
+            <div style={{ marginTop:8,fontSize:13,fontWeight:600,color:scoreDelta>=0?'var(--success)':'var(--coral)' }}>
+              {scoreDelta>=0?'+':''}{scoreDelta} from edit
+            </div>
+          )}
         </div>
-      )}
-      {error && (
-        <div style={{ display:'flex',gap:8,alignItems:'center',padding:'10px 14px',background:'var(--coral-light)',borderRadius:'var(--radius-sm)',marginBottom:10,border:'1px solid #F5D0CD',fontSize:13,color:'var(--coral)' }}>
-          <AlertCircle size={14}/> {error}
+
+        {/* Quick tips */}
+        <div className="card" style={{ background:'var(--surface-pink)' }}>
+          <div style={{ fontSize:12,fontWeight:600,color:'var(--text-tertiary)',textTransform:'uppercase',marginBottom:10 }}>Quick wins</div>
+          {[
+            { icon:'📊', tip:'Add numbers to every bullet — "increased sales by 32%"' },
+            { icon:'🔑', tip:'Copy exact keywords from job descriptions you want' },
+            { icon:'⚡', tip:'Start every bullet with a strong action verb' },
+            { icon:'📋', tip:'Add a Skills section if you don\'t have one' },
+            { icon:'🎯', tip:'Tailor your summary to your target job title' },
+          ].map((t,i) => (
+            <div key={i} style={{ display:'flex',gap:8,marginBottom:8,fontSize:12,color:'var(--text-secondary)',alignItems:'flex-start' }}>
+              <span style={{ flexShrink:0 }}>{t.icon}</span>
+              <span>{t.tip}</span>
+            </div>
+          ))}
         </div>
-      )}
 
-      <div style={{ position:'relative' }}>
-        <textarea
-          value={text}
-          onChange={e => { setText(e.target.value); setCharCount(e.target.value.length) }}
-          style={{
-            width:'100%',
-            minHeight:'65vh',
-            fontFamily:"DM Mono, Fira Code, Courier New, monospace",
-            fontSize:13,
-            lineHeight:1.7,
-            padding:'1rem',
-            border:'1.5px solid var(--border)',
-            borderRadius:'var(--radius)',
-            background:'white',
-            color:'var(--text)',
-            resize:'vertical',
-          }}
-          placeholder="Your CV text will appear here..."
-          spellCheck={false}
-        />
-      </div>
+        {/* Gaps from analysis */}
+        {profile?.analysis?.critical_gaps?.length > 0 && (
+          <div className="card">
+            <div style={{ fontSize:12,fontWeight:600,color:'var(--text-tertiary)',textTransform:'uppercase',marginBottom:10 }}>Gaps to address</div>
+            {(profile.analysis.critical_gaps||[]).slice(0,4).map((g,i) => {
+              const skill = typeof g==='object'?g.skill:g
+              const sev = typeof g==='object'?g.severity:'moderate'
+              return (
+                <div key={i} style={{ display:'flex',gap:6,alignItems:'center',marginBottom:6,fontSize:12 }}>
+                  <span className={`badge badge-${sev==='critical'?'coral':sev==='moderate'?'amber':'gray'}`} style={{ fontSize:10,flexShrink:0 }}>{sev}</span>
+                  <span style={{ color:'var(--text-secondary)' }}>{skill}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
-      <div style={{ marginTop:10,padding:'10px 14px',background:'var(--accent2-light)',borderRadius:'var(--radius-sm)',fontSize:12,color:'var(--accent2-dark)',border:'1px solid var(--border-blue)' }}>
-        <strong>Tips:</strong> Add quantified achievements (e.g. "increased sales by 30%"), include keywords from job descriptions you're targeting, and make sure your job titles are clear. Each save re-runs the full ATS analysis.
+        {/* Keyboard shortcuts */}
+        <div className="card" style={{ fontSize:11,color:'var(--text-tertiary)' }}>
+          <div style={{ fontWeight:600,marginBottom:6 }}>Tips</div>
+          <div>• Select text → AI Rewrite button appears</div>
+          <div style={{ marginTop:4 }}>• Edit tab → Suggestions tab → see AI fixes</div>
+          <div style={{ marginTop:4 }}>• Diff tab → see every line you changed</div>
+          <div style={{ marginTop:4 }}>• Save & re-score updates your ATS score</div>
+        </div>
       </div>
     </div>
   )
 }
+
 
 // ── DASHBOARD ─────────────────────────────────────────────────
 function Dashboard({ profile, applications }) {

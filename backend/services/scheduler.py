@@ -3,9 +3,9 @@ from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
 from models.database import AsyncSessionLocal, JobPosting
 from services.job_service import (
-    search_jobs_jsearch, search_jobs_remotive, search_jobs_arbeitnow,
-    search_jobs_wuzzuf, search_jobs_wuzzuf_api, search_jobs_himalayas,
-    search_jobs_serpapi
+    search_jobs_jsearch, search_jobs_linkedin, search_jobs_remotive,
+    search_jobs_arbeitnow, search_jobs_wuzzuf, search_jobs_wuzzuf_api,
+    search_jobs_himalayas, search_jobs_serpapi
 )
 from config import get_settings
 from datetime import datetime
@@ -24,7 +24,12 @@ async def fetch_and_store_jobs(cv_skills: list[str] = None):
         jobs.extend(jsearch)
         print(f"[Scheduler] JSearch: {len(jsearch)} jobs")
 
-    # 2. Wuzzuf API — best Egypt source
+    # 2. LinkedIn Jobs — Egypt-focused, separate RapidAPI quota
+    linkedin = await search_jobs_linkedin(cv_skills)
+    jobs.extend(linkedin)
+    print(f"[Scheduler] LinkedIn: {len(linkedin)} jobs")
+
+    # 3. Wuzzuf API — best Egypt source
     wuzzuf_api = await search_jobs_wuzzuf_api(cv_skills)
     jobs.extend(wuzzuf_api)
     print(f"[Scheduler] Wuzzuf API: {len(wuzzuf_api)} jobs")
